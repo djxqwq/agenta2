@@ -12,9 +12,9 @@ echo ==============================================
 echo.
 
 REM ---- 1. Docker ----
-echo [1/5] Starting Docker infrastructure...
+echo [1/6] Starting Docker infrastructure...
 cd /d "%SCRIPT_DIR%\hosting\docker-compose\oss"
-set COMPOSE_PROJECT_NAME=agenta-v101
+set COMPOSE_PROJECT_NAME=agenta101
 docker compose -f docker-compose.infrastructure.yml --env-file .env.oss.dev up -d
 if !errorlevel! neq 0 (
     echo [ERROR] Failed to start Docker infrastructure
@@ -25,16 +25,16 @@ echo        Docker infrastructure started successfully.
 echo.
 
 REM ---- 2. Wait for DB ----
-echo [2/5] Waiting for database services (10s)...
+echo [2/6] Waiting for database services (10s)...
 timeout /t 10 /nobreak >nul
 echo.
 
 REM ---- 3. Migrations ----
-echo [3/5] Running database migrations...
+echo [3/6] Running database migrations...
 cd /d "%SCRIPT_DIR%\api"
 
-set POSTGRES_URI_CORE=postgresql+asyncpg://username:password@localhost:5432/agenta_oss_core
-set POSTGRES_URI_TRACING=postgresql+asyncpg://username:password@localhost:5432/agenta_oss_tracing
+set POSTGRES_URI_CORE=postgresql+asyncpg://username:password@localhost:5432/agenta101_core
+set POSTGRES_URI_TRACING=postgresql+asyncpg://username:password@localhost:5432/agenta101_tracing
 set SUPERTOKENS_URI_CORE=http://localhost:3567
 set AGENTA_LICENSE=oss
 set AGENTA_AUTH_KEY=agenta-local-dev-auth-key-2024
@@ -51,10 +51,10 @@ if !errorlevel! neq 0 (
 echo.
 
 REM ---- 4. API (port 8000) ----
-echo [4/5] Starting API service (port 8000)...
+echo [4/6] Starting API service (port 8000)...
 start "Agenta API" cmd /k "cd /d "%SCRIPT_DIR%\api" && ^
-set POSTGRES_URI_CORE=postgresql+asyncpg://username:password@localhost:5432/agenta_oss_core && ^
-set POSTGRES_URI_TRACING=postgresql+asyncpg://username:password@localhost:5432/agenta_oss_tracing && ^
+set POSTGRES_URI_CORE=postgresql+asyncpg://username:password@localhost:5432/agenta101_core && ^
+set POSTGRES_URI_TRACING=postgresql+asyncpg://username:password@localhost:5432/agenta101_tracing && ^
 set SUPERTOKENS_URI_CORE=http://localhost:3567 && ^
 set AGENTA_LICENSE=oss && ^
 set AGENTA_AUTH_KEY=agenta-local-dev-auth-key-2024 && ^
@@ -72,7 +72,7 @@ echo        API service starting...
 echo.
 
 REM ---- 5. Services (port 8080) ----
-echo [5/5] Starting Services (port 8080)...
+echo [5/6] Starting Services (port 8080)...
 start "Agenta Services" cmd /k "cd /d "%SCRIPT_DIR%\services" && ^
 set AGENTA_API_URL=http://localhost:8000 && ^
 set AGENTA_WEB_URL=http://localhost:3000 && ^
@@ -80,19 +80,21 @@ uv run python -m uvicorn entrypoints.main:app --host 0.0.0.0 --port 8080 --reloa
 echo        Services starting...
 echo.
 
-REM ---- Frontend hint ----
-echo ==============================================
-echo   Backend services launched in new windows.
-echo ==============================================
+REM ---- 6. Frontend (port 3000) ----
+echo [6/6] Starting Frontend (port 3000)...
+start "Agenta Web" cmd /k "cd /d "%SCRIPT_DIR%\web\oss" && pnpm dev"
+echo        Frontend starting...
 echo.
-echo   To start the frontend, open a terminal and run:
-echo     cd /d "%SCRIPT_DIR%\web\oss"
-echo     pnpm dev
+
+echo ==============================================
+echo   All services launched in separate windows!
+echo ==============================================
 echo.
 echo   Access URLs:
 echo     - Frontend : http://localhost:3000
 echo     - API Docs : http://localhost:8000/docs
 echo     - Services : http://localhost:8080
 echo.
+echo   Close this window when done.
 echo ==============================================
 pause
