@@ -15,7 +15,7 @@ services:
             - "${POSTGRES_PORT:-5432}:5432"
         restart: always
         healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U username -d agenta101_core"]
+            test: ["CMD-SHELL", "pg_isready -U username -d agenta_oss_core"]
             interval: 10s
             timeout: 5s
             retries: 5
