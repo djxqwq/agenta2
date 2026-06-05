@@ -1,0 +1,81 @@
+---
+id: assign-role-to-user
+title: "Assign Role To User"
+description: "Assigns a role to a user in a workspace."
+sidebar_label: "Assign Role To User"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVk1z2zYQ/SuYPTkzrOR6euKpauJMNGnHHlluD7LGsyZXJBISYADQtsrhf+8swC9JjZqcU18sAvv59uEBDTjMLMQb+Eubz7bChCxsI0jJJkZWTmoFMSyslZmyAoXRBQmnBYrakhFSCRQvvefsQT2ohcls/KCEEKLCfaExFRf3lsxKF/QmFuuchvVEK4dSSZUJl5PQJkMl/0ZOKmQahRRUoiwigSodk/tyZiHJkP1RpuLCOtMlWb4TeufjTutjD0NfarJOXKzCj87hPVq3uF0O2/rpEyXO97QiVxvVt/WkdRGLtalJyJDBF/aCVtg6ScjaXV0U+65MSiPxHgtLQruczIu0AacVSkt9yA/r9e31a0Ie8FgsQ1jff6rJCqWdyPGZREWmlNYyQk7z106bUrhcWoEJO8/OBDQk2E4JMkabrr4e/R7cPvEMItAVGT+OZQoxBPtHNnx0+pGNIIIKDZbkyDCLGlBYEsQwnQpEIJlFFbocImB8paEUYmdqisAmOZUIcQNuX7GvdUaqDCJw0hW8MFBTLFNo222IQdb9ptM9Ox6HZGKRcryFVVXIxDcx/2SZzc0kY2W4RSfJ8pen2rlCrr1BGwFj4KOr/c3O933o0kbDiqqLArjmPggfBI4xpTujdCbvzfRkeAyi3jaw9ADWTdfIaYpJFf2RhLblaIZspZUNOFxdXvK/Qw24G6gtVp0xfDvSIcsvV1engf/EQqahtWvm5XdEPZpfSq4boHRU2lODQicHu98wPqkcZWSg3Y6YozG4n4zndx0K5KmWNjs3yT/IWsz8/IPJGbL5Q7rm3ZZPUFV7QPrtpV9oI0jc6yTMwIfe7i1j+er+kzOMTSi/s5uQZRxRmNDXoXgXRvBvyXoTlqaTgIEfJblcs9RU2jqvLS6HGOaDmth5M1WWds4H0UIElsxzL0G1KdgJK+kHGT5z5yobz+dUz5JC1+kMM1IOZyiD4ZZjJLWRbu+DLG6XH2n/gTAlA/FmOzW4Y/4FRh2aDVPASn4kxqWTw0Xtcm26k9jrYR68uHFm9mrUtOtXLKugMJ0mjfQI0jN+n8jISGKQaqennFn4nsXidgknV/x0y1/Miadb34DfhugIzRFEiIZSHWH567DDdfBoQprL2c+zS17iCZeopin89SJYlMRai/twvRxU2YzK8P+b5Ad9k3QnjDVtXhUovep6VjadXmzG1wdLQ3z0FgmSsY0gZ5GJN9A0T2jp3hRty8tfajKsAdsIntFIfOKjs2kglZZ/pxDvGLoz1PRDZF19I75WcK8TikXiGYuavyCCz7Q/fj35myfvhajpTN6GbD/5+2EMcXJdsgIGj0XC0J+13U4k+Pbmbg0RPHVPrFKn7GPwhSHEl1Cu9t17JfRrDRSosppvuBhCTP77BykxRak=
+sidebar_class_name: "post api-method"
+info_path: reference/api/agenta-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Assign Role To User"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/workspaces/{workspace_id}/roles"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Assigns a role to a user in a workspace.
+
+Args:
+    payload (UserRole): The payload containing the organization id, user email, and role to assign.
+    workspace_id (str): The ID of the workspace.
+    request (Request): The FastAPI request object.
+
+Returns:
+    bool: True if the role was successfully assigned, False otherwise.
+
+Raises:
+    HTTPException: If the user does not have permission to perform this action.
+    HTTPException: If there is an error assigning the role to the user.
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./assign-role-to-user.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./assign-role-to-user.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./assign-role-to-user.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

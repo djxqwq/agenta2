@@ -1,0 +1,676 @@
+import {memo, useMemo} from "react"
+
+import {getWorkflowTypeColor, workflowMolecule} from "@agenta/entities/workflow"
+import {Skeleton, Typography} from "antd"
+import clsx from "clsx"
+import {useAtomValue} from "jotai"
+
+import {latestRevisionForTestsetAtomFamily, revision} from "@/oss/state/entities/testset"
+
+import {
+    appReferenceAtomFamily,
+    evaluatorReferenceAtomFamily,
+    environmentReferenceAtomFamily,
+    previewTestsetReferenceAtomFamily,
+    queryReferenceAtomFamily,
+} from "./atoms/entityReferences"
+import type {ReferenceTone} from "./referenceColors"
+import ReferenceTag from "./ReferenceTag"
+
+const {Text} = Typography
+
+/**
+ * Generic testset tag that fetches and displays a testset reference.
+ * Requires projectId to be passed explicitly for reusability across contexts.
+ * If revisionId is provided, the link will point to the specific revision.
+ */
+export const TestsetTag = memo(
+    ({
+        testsetId,
+        revisionId,
+        projectId,
+        projectURL,
+        toneOverride,
+        showIconOverride,
+        openExternally = false,
+    }: {
+        testsetId: string
+        revisionId?: string | null
+        projectId: string | null
+        projectURL?: string | null
+        toneOverride?: ReferenceTone | null
+        showIconOverride?: boolean
+        openExternally?: boolean
+    }) => {
+        const queryAtom = useMemo(
+            () => previewTestsetReferenceAtomFamily({projectId, testsetId}),
+            [projectId, testsetId],
+        )
+        const query = useAtomValue(queryAtom)
+
+        // Fetch revision entity to get version number (must be called before any early returns)
+        const revisionDataAtom = useMemo(
+            () => revision.selectors.data(revisionId ?? ""),
+            [revisionId],
+        )
+        const revisionEntity = useAtomValue(revisionDataAtom)
+        const revisionVersion = revisionId ? revisionEntity?.version : null
+
+        // Get latest revision for testset (used when revisionId is not provided)
+        const latestRevisionAtom = useMemo(
+            () => latestRevisionForTestsetAtomFamily(testsetId),
+            [testsetId],
+        )
+        const latestRevision = useAtomValue(latestRevisionAtom)
+
+        if ((query.isPending || query.isFetching) && !query.isError) {
+            return <Skeleton.Input active size="small" style={{width: 160}} />
+        }
+
+        const ref = query.data
+        // If we have an ID but no name, or query errored, the testset was likely deleted
+        const isDeleted = Boolean(query.isError || (ref?.id && !ref?.name))
+        const baseName = ref?.name ?? ref?.id ?? testsetId
+        // Append version to label if available
+        const label = isDeleted
+            ? "Deleted"
+            : revisionVersion != null
+              ? `${baseName} v${revisionVersion}`
+              : baseName
+        // Don't show link for deleted testsets
+        // Use revision ID for URL if available, then try latest revision, finally fall back to testset ID
+        // For old evaluations without revision info, we use testset ID which the page should handle
+        const targetId = revisionId ?? latestRevision?.id ?? testsetId
+        const href = isDeleted ? null : projectURL ? `${projectURL}/testsets/${targetId}` : null
+
+        return (
+            <ReferenceTag
+                label={label}
+                href={href ?? undefined}
+                tooltip={isDeleted ? `Testset ${testsetId} was deleted` : label}
+                copyValue={testsetId}
+                className="max-w-[220px] w-fit"
+                tone={toneOverride === null ? undefined : (toneOverride ?? "testset")}
+                showIcon={showIconOverride ?? true}
+                openExternally={openExternally}
+            />
+        )
+    },
+)
+
+/**
+ * Generic environment reference label that fetches and displays an environment reference.
+ * Requires projectId to be passed explicitly for reusability across contexts.
+ */
+export const EnvironmentReferenceLabel = memo(
+    ({
+        environmentId,
+        environmentSlug,
+        projectId,
+        applicationId,
+        projectURL,
+        href: explicitHref,
+        openExternally = false,
+        label: customLabel,
+    }: {
+        environmentId?: string | null
+        environmentSlug?: string | null
+        projectId: string | null
+        applicationId?: string | null
+        projectURL?: string | null
+        href?: string | null
+        openExternally?: boolean
+        label?: string
+    }) => {
+        const queryAtom = useMemo(
+            () =>
+                environmentReferenceAtomFamily({
+                    projectId,
+                    applicationId,
+                    environmentId,
+                    environmentSlug,
+                }),
+            [projectId, applicationId, environmentId, environmentSlug],
+        )
+        const query = useAtomValue(queryAtom)
+
+        if (!environmentId && !environmentSlug) {
+            if (customLabel) {
+                return (
+                    <ReferenceTag
+                        label={customLabel}
+                        className="max-w-[220px] w-fit"
+                        tone="environment"
+                    />
+                )
+            }
+            return <Text type="secondary">—</Text>
+        }
+
+        if ((query.isPending || query.isFetching) && !query.isError) {
+            return <Skeleton.Input active size="small" style={{width: 140}} />
+        }
+
+        const ref = query.data
+        const isDeleted = Boolean(
+            query.isError ||
+            ((environmentId || environmentSlug) && !ref?.name && !ref?.slug && !ref?.id),
+        )
+        const label = isDeleted
+            ? "Deleted"
+            : (ref?.name ??
+              ref?.slug ??
+              customLabel ??
+              ref?.id ??
+              environmentSlug ??
+              environmentId ??
+              "Environment")
+        const resolvedSlug = ref?.slug ?? ref?.name ?? environmentSlug ?? null
+        const targetAppId = ref?.appId ?? applicationId ?? null
+        const href = isDeleted
+            ? null
+            : (explicitHref ??
+              (projectURL && targetAppId && resolvedSlug
+                  ? `${projectURL}/apps/${targetAppId}/variants?tab=deployments&selectedEnvName=${encodeURIComponent(
+                        resolvedSlug,
+                    )}`
+                  : null))
+
+        return (
+            <ReferenceTag
+                label={label}
+                href={href ?? undefined}
+                tooltip={
+                    isDeleted
+                        ? `Environment ${environmentSlug ?? environmentId ?? ""} was deleted`
+                        : `Deployed to ${label}`
+                }
+                copyValue={resolvedSlug ?? ref?.id ?? environmentId ?? undefined}
+                className="max-w-[220px] w-fit"
+                tone="environment"
+                openExternally={openExternally}
+            />
+        )
+    },
+)
+
+/**
+ * Generic testset tag list that renders multiple testset tags.
+ * Requires projectId to be passed explicitly for reusability across contexts.
+ * If revisionMap is provided, it maps testset IDs to revision IDs for direct linking.
+ */
+export const TestsetTagList = memo(
+    ({
+        ids,
+        revisionMap,
+        projectId,
+        projectURL,
+        className,
+        toneOverride,
+        showIconOverride,
+        openExternally = false,
+    }: {
+        ids: string[]
+        revisionMap?: Map<string, string | null>
+        projectId: string | null
+        projectURL?: string | null
+        className?: string
+        toneOverride?: ReferenceTone | null
+        showIconOverride?: boolean
+        openExternally?: boolean
+    }) => {
+        if (!ids.length) {
+            return <Text type="secondary">—</Text>
+        }
+
+        return (
+            <div className={clsx("flex flex-wrap gap-2", className)}>
+                {ids.map((id) => (
+                    <TestsetTag
+                        key={id}
+                        testsetId={id}
+                        revisionId={revisionMap?.get(id)}
+                        projectId={projectId}
+                        projectURL={projectURL}
+                        toneOverride={toneOverride}
+                        showIconOverride={showIconOverride}
+                        openExternally={openExternally}
+                    />
+                ))}
+            </div>
+        )
+    },
+)
+
+/**
+ * Generic application reference label that fetches and displays an app reference.
+ * Requires projectId to be passed explicitly for reusability across contexts.
+ */
+export const ApplicationReferenceLabel = memo(
+    ({
+        applicationId,
+        projectId,
+        projectURL,
+        href: explicitHref,
+        openExternally = false,
+        label: customLabel,
+        toneOverride,
+        showIconOverride,
+    }: {
+        applicationId: string | null
+        projectId: string | null
+        projectURL?: string | null
+        href?: string | null
+        openExternally?: boolean
+        label?: string
+        toneOverride?: ReferenceTone | null
+        showIconOverride?: boolean
+    }) => {
+        const queryAtom = useMemo(
+            () => appReferenceAtomFamily({projectId, appId: applicationId}),
+            [projectId, applicationId],
+        )
+        const query = useAtomValue(queryAtom)
+
+        if (!applicationId) {
+            if (customLabel) {
+                return (
+                    <ReferenceTag label={customLabel} className="max-w-[220px] w-fit" tone="app" />
+                )
+            }
+            return <Text type="secondary">—</Text>
+        }
+
+        if ((query.isPending || query.isFetching) && !query.isError) {
+            return <Skeleton.Input active size="small" style={{width: 140}} />
+        }
+
+        const ref = query.data
+        // If we have an ID but no name/slug, or query errored, the app was likely deleted
+        const isDeleted = Boolean(query.isError || (ref?.id && !ref?.name && !ref?.slug))
+        const label = isDeleted
+            ? "Deleted"
+            : (ref?.name ?? ref?.slug ?? customLabel ?? ref?.id ?? applicationId)
+        // Don't show link for deleted apps
+        const href = isDeleted
+            ? null
+            : (explicitHref ??
+              (projectURL && applicationId ? `${projectURL}/apps/${applicationId}` : null))
+
+        return (
+            <ReferenceTag
+                label={label}
+                href={href ?? undefined}
+                tooltip={isDeleted ? `Application ${applicationId} was deleted` : label}
+                copyValue={applicationId ?? undefined}
+                className="max-w-[220px] w-fit"
+                tone={toneOverride === null ? undefined : (toneOverride ?? "app")}
+                showIcon={showIconOverride ?? true}
+                openExternally={openExternally}
+            />
+        )
+    },
+)
+
+/**
+ * Generic variant reference label that fetches and displays a variant config reference.
+ * Uses revisionId to fetch variant config details.
+ * Requires projectId to be passed explicitly for reusability across contexts.
+ */
+export const VariantReferenceLabel = memo(
+    ({
+        revisionId,
+        projectId: _projectId,
+        fallbackLabel,
+        showVersionPill = false,
+        explicitVersion,
+        href: explicitHref,
+        openExternally = false,
+        label: customLabel,
+        toneOverride,
+        showIconOverride,
+    }: {
+        revisionId?: string | null
+        projectId: string | null
+        fallbackLabel?: string | null
+        showVersionPill?: boolean
+        explicitVersion?: number | string | null
+        href?: string | null
+        openExternally?: boolean
+        label?: string
+        toneOverride?: ReferenceTone | null
+        showIconOverride?: boolean
+    }) => {
+        const dataAtom = useMemo(
+            () => workflowMolecule.selectors.data(revisionId ?? ""),
+            [revisionId],
+        )
+        const queryAtom = useMemo(
+            () => workflowMolecule.selectors.query(revisionId ?? ""),
+            [revisionId],
+        )
+        const data = useAtomValue(dataAtom)
+        const query = useAtomValue(queryAtom)
+
+        if (!revisionId) {
+            if (customLabel) {
+                return (
+                    <ReferenceTag
+                        label={customLabel}
+                        className="max-w-[220px] w-fit"
+                        tone="variant"
+                    />
+                )
+            }
+            return <Text type="secondary">—</Text>
+        }
+
+        if (query.isPending && !query.isError) {
+            return <Skeleton.Input active size="small" style={{width: 140}} />
+        }
+
+        const hasResolvedData = data?.name || data?.slug || data?.version != null || fallbackLabel
+        const isDeleted =
+            Boolean(query.isError && !fallbackLabel) || (!hasResolvedData && !fallbackLabel)
+        const label = isDeleted
+            ? "Deleted"
+            : (data?.name ?? data?.slug ?? fallbackLabel ?? customLabel ?? revisionId)
+        const resolvedVersion = isDeleted ? null : (explicitVersion ?? data?.version ?? null)
+        // Don't show link for deleted variants
+        const href = isDeleted ? null : explicitHref
+
+        return (
+            <div className="flex items-center gap-2">
+                <ReferenceTag
+                    label={label}
+                    href={href ?? undefined}
+                    tooltip={isDeleted ? `Variant ${revisionId} was deleted` : label}
+                    copyValue={revisionId ?? undefined}
+                    className="max-w-[220px]"
+                    tone={toneOverride === null ? undefined : (toneOverride ?? "variant")}
+                    showIcon={showIconOverride ?? true}
+                    openExternally={openExternally}
+                />
+                {showVersionPill && resolvedVersion ? (
+                    <span className="rounded-md bg-[var(--ag-c-F2F4F7)] px-2 py-0.5 text-xs font-medium text-[var(--ag-c-344054)]">
+                        v{resolvedVersion}
+                    </span>
+                ) : null}
+            </div>
+        )
+    },
+)
+
+/**
+ * Combined variant + revision label that displays "variantName v{revision}" in a single chip.
+ * Links to the specific revision in the playground.
+ * Requires both variantId (for variant name) and revisionId (for revision number).
+ */
+export const VariantRevisionLabel = memo(
+    ({
+        variantId,
+        revisionId,
+        projectId: _projectId,
+        fallbackVariantName,
+        fallbackRevision,
+        href: explicitHref,
+        toneOverride,
+        showIconOverride,
+    }: {
+        variantId?: string | null
+        revisionId?: string | null
+        projectId: string | null
+        fallbackVariantName?: string | null
+        fallbackRevision?: number | string | null
+        href?: string | null
+        toneOverride?: ReferenceTone | null
+        showIconOverride?: boolean
+    }) => {
+        const dataAtom = useMemo(
+            () => workflowMolecule.selectors.data(revisionId ?? ""),
+            [revisionId],
+        )
+        const queryAtom = useMemo(
+            () => workflowMolecule.selectors.query(revisionId ?? ""),
+            [revisionId],
+        )
+        const data = useAtomValue(dataAtom)
+        const query = useAtomValue(queryAtom)
+
+        if (!variantId && !revisionId) {
+            return <Text type="secondary">—</Text>
+        }
+
+        if (query.isPending && !query.isError) {
+            return <Skeleton.Input active size="small" style={{width: 140}} />
+        }
+
+        // Get variant name from workflow data or fallback
+        // Prefer `name` over `slug` — slug can be an opaque ID on older revisions
+        const variantName = data?.name ?? data?.slug ?? fallbackVariantName ?? null
+
+        // Get revision number from workflow data or fallback
+        const revision = data?.version ?? fallbackRevision ?? null
+
+        // Determine if deleted - only mark as deleted if:
+        // 1. Query errored AND we have no fallback variant name
+        // 2. No data from query AND no fallbacks at all
+        const hasFallbackData = fallbackVariantName || fallbackRevision != null
+        const hasResolvedData = data?.name || data?.slug || data?.version != null
+        const isDeleted = !hasFallbackData && (Boolean(query.isError) || !hasResolvedData)
+
+        // Build combined label: "variantName v{revision}"
+        const label = isDeleted
+            ? "Deleted"
+            : revision != null
+              ? `${variantName ?? "variant"} v${revision}`
+              : (variantName ?? revisionId ?? variantId ?? "Unknown")
+
+        const href = isDeleted ? null : explicitHref
+
+        return (
+            <ReferenceTag
+                label={label}
+                href={href ?? undefined}
+                tooltip={isDeleted ? `Variant ${revisionId ?? variantId} was deleted` : label}
+                copyValue={revisionId ?? variantId ?? undefined}
+                className="max-w-[220px]"
+                tone={toneOverride === null ? undefined : (toneOverride ?? "variant")}
+                showIcon={showIconOverride ?? true}
+            />
+        )
+    },
+)
+
+/**
+ * Generic variant reference text (no tag styling, just text).
+ * Requires projectId to be passed explicitly for reusability across contexts.
+ */
+export const VariantReferenceText = memo(
+    ({
+        revisionId,
+        projectId: _projectId,
+        fallback,
+        label: customLabel,
+    }: {
+        revisionId: string | null
+        projectId: string | null
+        fallback?: string
+        label?: string
+    }) => {
+        const dataAtom = useMemo(
+            () => workflowMolecule.selectors.data(revisionId ?? ""),
+            [revisionId],
+        )
+        const queryAtom = useMemo(
+            () => workflowMolecule.selectors.query(revisionId ?? ""),
+            [revisionId],
+        )
+        const data = useAtomValue(dataAtom)
+        const query = useAtomValue(queryAtom)
+
+        if (!revisionId) {
+            return (
+                <Text type="secondary" className="w-fit">
+                    {customLabel ?? fallback ?? "—"}
+                </Text>
+            )
+        }
+
+        if (query.isPending) {
+            return <Skeleton.Input active size="small" style={{width: 140}} />
+        }
+
+        const label = data?.slug ?? revisionId
+
+        return <Text>{label}</Text>
+    },
+)
+
+/**
+ * Generic evaluator reference label that fetches and displays an evaluator reference.
+ * Requires projectId to be passed explicitly for reusability across contexts.
+ */
+export const EvaluatorReferenceLabel = memo(
+    ({
+        evaluatorId,
+        evaluatorSlug,
+        projectId,
+        href: explicitHref,
+        openExternally = false,
+        label: customLabel,
+        toneOverride,
+        className,
+    }: {
+        evaluatorId?: string | null
+        evaluatorSlug?: string | null
+        projectId: string | null
+        href?: string | null
+        openExternally?: boolean
+        label?: string
+        toneOverride?: ReferenceTone | null
+        className?: string
+    }) => {
+        const queryAtom = useMemo(
+            () => evaluatorReferenceAtomFamily({projectId, slug: evaluatorSlug, id: evaluatorId}),
+            [projectId, evaluatorSlug, evaluatorId],
+        )
+        const query = useAtomValue(queryAtom)
+
+        if (!evaluatorId && !evaluatorSlug) {
+            if (customLabel) {
+                return (
+                    <ReferenceTag
+                        label={customLabel}
+                        className="max-w-[220px] w-fit"
+                        tone={toneOverride === null ? undefined : (toneOverride ?? "evaluator")}
+                    />
+                )
+            }
+            return <Text type="secondary">—</Text>
+        }
+
+        if ((query.isPending || query.isFetching) && !query.isError) {
+            return <Skeleton.Input active size="small" style={{width: 140}} />
+        }
+
+        const ref = query.data
+        // If we have an ID/slug but no name, or query errored, the evaluator was likely deleted
+        const isDeleted = Boolean(query.isError || ((ref?.id || ref?.slug) && !ref?.name))
+        const displayId = evaluatorId ?? evaluatorSlug ?? ref?.id ?? ref?.slug ?? ""
+        const label = isDeleted
+            ? "Deleted"
+            : (ref?.name ??
+              ref?.slug ??
+              customLabel ??
+              ref?.id ??
+              evaluatorSlug ??
+              evaluatorId ??
+              "—")
+        // Don't show link for deleted evaluators
+        const href = isDeleted ? null : explicitHref
+        const workflowTypeColor = getWorkflowTypeColor(ref?.workflowKey)
+        const workflowTypeStyle = workflowTypeColor
+            ? {
+                  backgroundColor: workflowTypeColor.bg,
+                  borderColor: workflowTypeColor.border,
+                  color: workflowTypeColor.text,
+              }
+            : undefined
+
+        return (
+            <ReferenceTag
+                label={label}
+                href={href ?? undefined}
+                tooltip={isDeleted ? `Evaluator ${displayId} was deleted` : label}
+                copyValue={displayId}
+                className={clsx("max-w-[220px] w-fit", className)}
+                tone={toneOverride === null ? undefined : (toneOverride ?? "evaluator")}
+                openExternally={openExternally}
+                style={workflowTypeStyle}
+                iconColor={workflowTypeColor?.text}
+            />
+        )
+    },
+)
+
+/**
+ * Generic query reference label that fetches and displays a query reference.
+ * Requires projectId to be passed explicitly for reusability across contexts.
+ */
+export const QueryReferenceLabel = memo(
+    ({
+        queryId,
+        querySlug,
+        projectId,
+        href: explicitHref,
+        openExternally = false,
+        label: customLabel,
+    }: {
+        queryId?: string | null
+        querySlug?: string | null
+        projectId: string | null
+        href?: string | null
+        openExternally?: boolean
+        label?: string
+    }) => {
+        const queryAtom = useMemo(
+            () => queryReferenceAtomFamily({projectId, queryId, querySlug}),
+            [projectId, queryId, querySlug],
+        )
+        const query = useAtomValue(queryAtom)
+
+        if (!queryId && !querySlug) {
+            if (customLabel) {
+                return <ReferenceTag label={customLabel} className="max-w-[220px]" tone="query" />
+            }
+            return <Text type="secondary">—</Text>
+        }
+
+        if ((query.isPending || query.isFetching) && !query.isError) {
+            return <Skeleton.Input active size="small" style={{width: 140}} />
+        }
+
+        const ref = query.data
+        // If we have an ID/slug but no name, or query errored, the query was likely deleted
+        const isDeleted = Boolean(query.isError || ((ref?.id || ref?.slug) && !ref?.name))
+        const displayId = queryId ?? querySlug ?? ref?.id ?? ref?.slug ?? ""
+        const label = isDeleted
+            ? "Deleted"
+            : (ref?.name ?? ref?.slug ?? customLabel ?? ref?.id ?? querySlug ?? queryId ?? "—")
+        // Don't show link for deleted queries
+        const href = isDeleted ? null : explicitHref
+
+        return (
+            <ReferenceTag
+                label={label}
+                href={href ?? undefined}
+                tooltip={isDeleted ? `Query ${displayId} was deleted` : label}
+                copyValue={displayId}
+                className="max-w-[220px]"
+                tone="query"
+                openExternally={openExternally}
+            />
+        )
+    },
+)

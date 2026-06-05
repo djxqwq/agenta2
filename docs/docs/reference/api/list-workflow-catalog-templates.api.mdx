@@ -1,0 +1,75 @@
+---
+id: list-workflow-catalog-templates
+title: "List Workflow Catalog Templates"
+description: "List workflow blueprints shipped with the product."
+sidebar_label: "List Workflow Catalog Templates"
+hide_title: true
+hide_table_of_contents: true
+api: eJztWEtv2zgQ/ivCnFpAtbPBnnRaI0m32XbbIEnbQ2IktDS22VKkykdar6H/vhjqRfmhNOnjlJNhaubj8JsHObMGyxYGkiv4qPTnuVBfDUxjyNCkmheWKwkJvOHGRl/r79FMOCw0l9ZEZsmLArPoK7fLyC4xKrTKXGpH1/JavuTCoo5mqyhTOeOykrrl5oYVheApI/Tb2K/gHROOWaVv40jpa0lrRhK4vR1FE50u+R1mkcW8EMyiiZjGaMmzDGXkpEBjolsuU+EyvGG19O215Cay2uEouuwpLoSaMRExmUUaWfZCSbHyJl8gJtFVy8T02VjjHDXKFMes4C8Wjmc4bpgwz0cQgypQ+6OcZpCA4MbeNAI3KbNMqMVNazfEUDDNcrSoifU1SJYjJLBpPMTAifovDvUKYtD4xXGNGSRzJgzGYNIl5gySNTC5ejf3WHZVENZMKYFMQhm3S9IJAeU0BsutoIXTar+WWihJujGm56JfboqJJsFuG4a0kfEbzDhp99owog7F32DCRb1TSesaTaGkQUOIhwcH9NPPzAuXpmjM3InovBaGGFIlLUrr7eiYHX8ypLMOrCw0Ra/l1Q6pcpVSbR+XFhdIxDcGHnmJzfLw1uUz1JGaB/mp0TotMRt56TlzwkJyUMbQpUKyBm4xN9uGVMTvINFYzeVikMO3pFtumPg4qOMAoozhM64Ccmr9Tvo1rkgqZRYXStcn6bZtj7q5f7PAtGarQXuOOugyhrnwhTvco88iZXGT3clWHPbzr6s6rbN8SJcxwWhMVZ6jzO5HOg9Ed4OFleU+s3pFaBdYVx3ugToJysguoCbD74G5aAvBBkjnRzX7hKkN1Jrr5Ki6DF56v237mWKWWTbkUaf5Y2P5veYUNE6LxyMIQlgiy/zdFaKwLOPkJSbOegYP7dM/2h1q8wOp+qFWL2Mwwi0eC3NBuhQQ2RBCDHOlc2YhAed4NlzS/c26NzbOm+dFFQB9sSHcV7Ubyhi0k5YPF8wYULqcXnnFyi59NpFAVd4ghk/sjtV/pkO7ntdbEc2V+GOJrrTL5socLGThi+lHo27jauvZSLdYuBJe2bv3gpTr1Ammn710QvxjlHzxztnC2eewy5n1HfA9WvffBhu68KDwOesopXCXhbNP5P4sck8rOssYlNd+YvZnMfuu5nOopBL4RV1Udt6yT+Xkl5aTMt5zurpHuu+ZdI53nO7yY3oM7XDgDtd3fdiVf6VP9z6+mjnA1ru707gMevV+n/PxIROQwRjdY5Vpe7iyJPU/Dw+3W74PTPDMv4mjE639g/aR/V6GlnEx0IcJlfa+PiQTpvsZfqOaVj+G3CyGmqp/0Ri2CNy1X9STEV3S1+ZK8+JhUfYNmv0WwGy55oi4/GZ3ui+MM+KmMr+WC1+jrYsqD+2n4rhywVCsvLq8PNsCrOIjR7tUNHVa+JakYHYJCXTzqXE9fxq3TfcYYjCo75rpk+8HgGZb3onV36W1hUnGY3SjVCiXjdgCpWUjxivBKWGkTnO78iCTs9PXuKpepJBcTUMBX4mraOqLtR5gBafWOW7GLRNnl0rz/3qzp6rr8DxxOVehYyfeuGhydrqVsL1PlCQstd18of4M8caxu9PSuzn3KQIWWf5X+4U82nYscDD6Y3RAS4UyNmcy2MJPTtu6Uad7tLfErLtUfhq6Dg1d69ihTB0XgnEZNLdVGlxBqwF+KkPMQzh/ioFydqmMJen1esYMvteiLGm5GvFRdGfcsJkIhnx+DrRrYEt0klU+lfapbY5Wv1MpHIN+p0o3tOwUpvRHc9Lwmdr08/6kleYkTbEItbauFEJpS8/fJ5dQlv8DP5Bvng==
+sidebar_class_name: "get api-method"
+info_path: reference/api/agenta-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"List Workflow Catalog Templates"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/workflows/catalog/templates/"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+List workflow blueprints shipped with the product.
+
+Filter by domain with `is_application`, `is_evaluator`, or
+`is_snippet`. Archived templates are hidden unless `include_archived`
+is true. Templates are global and read-only.
+
+See: [Workflows](/reference/api-guide/workflows).
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./list-workflow-catalog-templates.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./list-workflow-catalog-templates.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./list-workflow-catalog-templates.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

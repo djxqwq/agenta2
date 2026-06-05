@@ -1,0 +1,74 @@
+---
+id: fetch-application-catalog-template
+title: "Fetch Application Catalog Template"
+description: "Fetch one application template by key."
+sidebar_label: "Fetch Application Catalog Template"
+hide_title: true
+hide_table_of_contents: true
+api: eJztWEtz2zgM/iscnNoZrZ129uTTetJ2m3a3yeTRPSSemJEgiw1FqiTlxuvRf98BJVmUH0qbdm852SKBjyA+ECSwBscXFibXMC0KKWLuhFYWZhEkaGMjCvqGCbxDF2dMK2S8k2MO80Jyh+xuxe5xNbpRN+rKInOZsMxpJpQtMHbMZcjwgceOzUsj5hGbJ9zxecS4StiHi9NP7CLOMOeWpdowfqM6YEy1QRYb5E6oBeOqZ0BqdM6EG7F5q3F7j6s5i3WO9kb5aVp87kdTgTJhOmW8s9ygK43ChLZAklJYx1AlhRbK3agXZBA+8LyQyOaxpl9amfYQZ9zRb6b1/fzlCCLQBRpv2EkCE0jJZ7eBubcxd1zqxW27OkRQcMNzdGiIhDUoniNMINwNRCCIgoK7DCIw+LUUBhOYOFNiBNZ7DiZrcKuCdK0zQi0gAiecpIHLdq8fcQVVNSMMW2hl0ZLa66Mj+unzfVHGMVqblpKdN8IQQayVQ+VIPNjW+IslnXVgSmHIFU7UK8S6rJUaC4VyuEATmHjsJbaDbv5qzr5lqFiqS5VEbH40Z9plaL4JiyMvnvJSOpgcVdHGZ946tTpNvUP7ltTuDef7TquizYgqpQRyVmvjJ9Kttmx8GtSbAKKKgEge4M/TFkHMHS60aXbSLSsc5nZXnzxSD3Bj+GrQnuMOuooglT4lHPaisLfcxJlYUhRuUO+0lshVYPiJZdNWLiAr5dJiFRGMwVjnOarkcaTzQHQ/WBCSj5oViO4HwyWXJXfaPAb1diO4H8gqURToHoO5aMR2QDoe9d0XjF2g9o8296nU347rtPLO87bLM8Usd3yI0dKIp8bylREUNKWRT0eQhJAhT3waDFF4kghiicuznsFD6/S3tkRjf+Kofm7UqwisLBdPhbkgXQqIZAghglSbnDuYQFmKZBDxJIGh2DjHFA2qGOsA6IsN4b5vaKgiMKVyYjhhRoCqzOn9UKxc5k8TCdTpDSL4wpe8+ZgNrXreLEVursWf6uhau2ovxsFEFl6+Pxt1W3dbz8b8rj/SZgAa2r8WxMLEpeTmxbtSyg9Wq99OS1eU7iXsI7O5A75H6/HbYEsXfih8zjqXUrironTPzv1Vzj2p3VlFoL32s2d/lWdPG38OpVQCb+qU/bfsczr5X9NJFR3YnX8oPf5MOseloLv8DT2G9hC4h/qu2Lr2r/TAsuAJ2by/2jpr74b6lU2j0ZWhCaZC+a2NBmPw8KpBmbZVygm1kBhWvLUgQ7VEqQukFWnN31+/3i0EP3MpkrrYfmuMf+U+sQpM0HHhH4mbiqUvIHXcm/2R4zHbLnc6l/2lm4d+FUFuF0OV1t9oLV9gF6KHRb0z2CXNtvecFw8zta/a3EMAs8PnMfnywe3lPAw+8k1tfiMXPlE3FNUMHXbFm5qCoQB7f3l5tgNYx0eOLtPU2Fj4OsX3IyYwDmLAjpsOx7iNNjteh72MCiKwaJZtu8NXDQQhPKv1Z+ZcYSfjMZajWOoyGfEFKsdHXNSCM8KISyPcyoNMz04+4qp+t8LkehYK+Hxdh1dfbEMJL8RH32RpWi/T0mXaiH/b4tD3XuraxDtOqFSHTE+9cWx6drJz8npTdGp47LouRDMN0da2u93S6zr3ZwYc8vyPzQxRvKlr4Gj0anREQ4W2LucqWKJu2wVJg7WZ57JrQW01NDbH+7np911NvyaO6BiPC8mFCsrh+oxch3nSgm/lEAnQNa1odNLr+s0iyLR1pL1e33GLV0ZWFQ1/LdFQ5M8iWHIj+B3F4fUaEmHpf7K5EA8S++K8SS0v2aENtKdD0dGgFgd9QdOr6vcnffLN2uO3bkSmcYy+BGyVd+4KOqebnPLn20uoqv8AawzVLQ==
+sidebar_class_name: "get api-method"
+info_path: reference/api/agenta-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Fetch Application Catalog Template"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/applications/catalog/templates/{template_key}"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Fetch one application template by key.
+
+Use this to inspect the exact `uri`, `data`, and JSON Schemas for a
+template before creating an application from it. `template_key` comes
+from the `key` field of a template returned by the list endpoint
+(for example `completion`, `chat`, `hook`).
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./fetch-application-catalog-template.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./fetch-application-catalog-template.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./fetch-application-catalog-template.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

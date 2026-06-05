@@ -1,0 +1,78 @@
+---
+id: fetch-legacy-analytics
+title: "Fetch Legacy Analytics"
+description: "Aggregate span metrics using the fixed legacy schema."
+sidebar_label: "Fetch Legacy Analytics"
+hide_title: true
+hide_table_of_contents: true
+api: eJztWN9v2zYQ/lcIPrWAamfFnvw0r13RoF0TtO5e4qA+S2eLDUWq5CmJa/h/H46UZDpuXDftsGHok23p493H+31eS4Kll6ML+RqXkK/kZSYL9LlTNSlr5EiOl0uHSyAUvgYjKiSnci8ar8xSUIlioW6xEDocFz4vsYLB1EzNW6TGGS9IVfhk3uRXSFgI6MR5caOoFNCe90jCLsRCoS781Dya5bYxNMvErGgcMBf+nltPnr+QvULjZ4+Fr7UioQxZfkigZwJMMTUzdM46PxuISYnCl1CjqB0WQfPM15j72ZPCqWs0AgzoFfGtwBRCeXGFNU3NwrpwQbxVnvi2du7RXcNcaUUrUYAv5xZc4QWVQCK3xjcVCkXh+m/whmnhMrL3wpe20QWTWKATs/OzdxMxJAe5MsthT2H4qUG3mmVTc1OqvBSQ51hTTzkwzMEI31QVOPUZBbi5IgduFR0ERE7NG0KfTY2xJD42nqKjbONaa7deHMhM2hojw9NCjuQCKS8/RGd+6EnJTNbgoEJCx8GylgYqZLjNG36rOFICc5lJh58a5bCQowVoj5mMQSFHawlmdbYIAmhVswBPTpmlzCSapuIwZIOgzCTfhYORFGkGvgiaNll/0jRay80+giE9O1cB/VB6sERDEM1mCDWyJVe7RIPSw0wjJKFqdYH+R1BN9IboQ3eQylnUm1IxePOvUHkT9aZUtKrUdzE5Ru/roCRVy6fcNeh/WvNppydV7oDwexSbppp/Re9bVrGTKEoTum/Q2kdyPLhh6Q59bY1Hz4CnJyf8sdtK3jV5jt4vGi3etmCZydwaQkPhMnWtVR6q0fCj5zPrRGntuFaRihpCfwhcdg2+veazgLjbz94E+3Cv4cYkYmPywoVuhcUgHFhAo0mOTjaZbAGsSRFWfp8Jy/EEVZ2w6QtHW4NGkjvPE4YmDCf9yU22jbpDd9qGTCZDuztgmAfF5NZoiQ26FvzQgHvenb8jN7Tzhwp9Fg7fkRjngoeKnMTTOzJZaITb+UfMKXHGuO+Pm0zGeeOnO/4T7vgCalvNLpKMzdJiHxOqd2XC5PdQBORWLDgHK3kX4PeqzeTg8BuHsTjzikft/JqJbnZ9LEqrC548D0/DPBN2E/FO/bq4PGSvM130Jkvq8e4F4lqQjMhdmd8d3+NA2Y3/crNhxb8+fbrfBP4CrYpwBfEHX/PhHaBAAqUPFGZt85233zKoXN7v69c2EuRwqPzyS1W/g/6J3sMSt4FzPzQYQ0z4bWgGdUNppz0NDzhJ6TYRs+fUZ2zLW/pqCrBtIv0Wl0T71kXRQ/eb4nl0waEoezmZnO8JjPFRIZWWt47ahoGzBirlSPZLEe8AfphuIbx/dStI4zSDoVbBgfFnSVT70XCIzSDXtikGcWAfgIrAS5aRN07RKggZn5++wtVLhAJdyJcE8I7jLkbSLqy3PtTqFbI92jlq3FBpnfrcVdcwTpXx1CZ4dWFTp44DOTE+P93Lu51XnCCQh3joNHV7yO61t7flMlaF9JCEUP3Wv2Fvsg2jmpPBL4MTfsQuqMAkKl7wKija/B8nTtghut5m78+/Cv7nfxW0Uc/1ZVhrUKEChgBct7kb9/dY2EL2ykxu8/cykyVn+uhCrtdz8Pje6c2GH8eVgxOyUB7mOlk6rnCV/NFwDbphDiHl78W2a/8x4H7xPgbcr8bHgLvl9RhsMoQcA293xKOM0a12W/Al/3CK0aHkZV2JYvvHU+MQSsmpvb7MUvr6zQEqN5u/Aea6AcQ=
+sidebar_class_name: "post api-method"
+info_path: reference/api/agenta-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Fetch Legacy Analytics"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/tracing/spans/analytics"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Aggregate span metrics using the fixed legacy schema.
+
+Returns time-bucketed aggregates with a fixed set of fields
+(`count`, `duration`, `costs`, `tokens`) split into `total` and
+`errors`. The shape predates `specs`-driven analytics and is kept
+for the existing observability dashboards that consume it.
+
+New integrations should prefer `POST /tracing/analytics/query`,
+which accepts `specs` and can summarize arbitrary span attributes,
+not just the four fixed metrics.
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./fetch-legacy-analytics.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./fetch-legacy-analytics.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./fetch-legacy-analytics.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

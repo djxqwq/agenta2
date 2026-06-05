@@ -1,0 +1,674 @@
+import {existsSync, readFileSync} from "fs"
+
+import {expect, Page, Response} from "@playwright/test"
+
+import {EvaluationRun} from "../../../../../oss/src/lib/hooks/usePreviewEvaluations/types"
+import {SnakeToCamelCaseKeys, testset} from "../../../../../oss/src/lib/Types"
+import {getProjectMetadataPath} from "../../../../playwright/config/runtime.ts"
+import {UseFn} from "../../types"
+import {FixtureContext} from "../types"
+
+import type {ApiHandlerOptions, ApiHelpers, CreateTestsetInput, CreatedTestset} from "./types"
+
+type APP_TYPE = "completion" | "chat" | "custom"
+type CREATABLE_APP_TYPE = Exclude<APP_TYPE, "custom">
+
+interface ListAppsItem {
+    id: string
+    name: string
+    app_type: APP_TYPE
+    flags: {
+        is_chat?: boolean
+        is_custom?: boolean
+        is_application?: boolean
+        is_evaluator?: boolean
+    } | null
+    created_at: string | null
+    [key: string]: any
+}
+
+interface ApiVariant {
+    id: string
+    name: string | null
+    slug: string | null
+    workflow_id: string | null
+    artifact_id: string | null
+    flags: {
+        is_chat?: boolean
+        is_custom?: boolean
+        is_application?: boolean
+        is_evaluator?: boolean
+    } | null
+    created_at: string | null
+    updated_at: string | null
+}
+
+const latestRevisionIdByAppId = new Map<string, string>()
+
+interface TestProjectMetadata {
+    project_id?: string
+    workspace_id?: string
+}
+
+interface SimpleTestsetApiResponse {
+    count: number
+    testset?: {
+        id?: string
+        name?: string
+        revision_id?: string
+    }
+}
+
+export const getKnownLatestRevisionId = (appId: string): string | null => {
+    return latestRevisionIdByAppId.get(appId) ?? null
+}
+
+const readTestProjectMetadata = (): TestProjectMetadata | null => {
+    const metadataPath = getProjectMetadataPath()
+
+    if (!existsSync(metadataPath)) {
+        return null
+    }
+
+    try {
+        return JSON.parse(readFileSync(metadataPath, "utf8")) as TestProjectMetadata
+    } catch {
+        return null
+    }
+}
+
+export const getProjectScopedBasePath = (page: Page): string => {
+    const currentUrl = page.url()
+    if (currentUrl) {
+        const pathname = new URL(currentUrl).pathname
+        const match = pathname.match(/(\/w\/[^/]+\/p\/[^/]+)/)
+        if (match?.[1]) {
+            return match[1]
+        }
+    }
+
+    const configuredUrl = process.env.AGENTA_WEB_URL
+    if (configuredUrl) {
+        const pathname = new URL(configuredUrl).pathname
+        const match = pathname.match(/(\/w\/[^/]+\/p\/[^/]+)/)
+        if (match?.[1]) {
+            return match[1]
+        }
+    }
+
+    const testProject = readTestProjectMetadata()
+    if (testProject?.workspace_id && testProject?.project_id) {
+        return `/w/${testProject.workspace_id}/p/${testProject.project_id}`
+    }
+
+    throw new Error(`Could not derive project scoped path from current URL: ${page.url()}`)
+}
+
+const getApiURL = (page: Page): string => {
+    if (process.env.AGENTA_API_URL) {
+        return process.env.AGENTA_API_URL
+    }
+
+    const currentUrl = page.url() || process.env.AGENTA_WEB_URL || "http://localhost:3000"
+    const parsed = new URL(currentUrl)
+    return `${parsed.origin}/api`
+}
+
+const getProjectId = (page: Page): string => {
+    const currentUrl = page.url()
+    if (currentUrl) {
+        const pathname = new URL(currentUrl).pathname
+        const match = pathname.match(/\/p\/([^/]+)/)
+        if (match?.[1]) {
+            return match[1]
+        }
+    }
+
+    const configuredUrl = process.env.AGENTA_WEB_URL
+    if (configuredUrl) {
+        const pathname = new URL(configuredUrl).pathname
+        const match = pathname.match(/\/p\/([^/]+)/)
+        if (match?.[1]) {
+            return match[1]
+        }
+    }
+
+    const testProject = readTestProjectMetadata()
+    if (testProject?.project_id) {
+        return testProject.project_id
+    }
+
+    throw new Error(`Could not derive project ID from current URL: ${page.url()}`)
+}
+
+export const waitForApiResponse = async <T>(page: Page, options: ApiHandlerOptions<T>) => {
+    const {route, method = "POST", validateStatus = true, responseHandler} = options
+
+    const response = await page.waitForResponse((response) => {
+        const url = response.url()
+        return (
+            (route instanceof RegExp ? route.test(url) : url.includes(route)) &&
+            response.request().method() === method
+        )
+    })
+
+    if (validateStatus) {
+        expect(response.ok()).toBe(true)
+    }
+
+    // Safely attempt to parse JSON if available
+    let data: any = null
+    const text = await response.text()
+
+    try {
+        data = text ? JSON.parse(text) : null
+    } catch (e) {
+        // Could log or ignore if expected
+        console.warn("Response is not valid JSON:", e)
+    }
+
+    if (responseHandler && data) {
+        await responseHandler(data)
+    }
+
+    return data
+}
+
+const waitForMatchingResponses = async (
+    page: Page,
+    predicate: (response: Response) => boolean,
+    count: number,
+) => {
+    return await new Promise<Response[]>((resolve) => {
+        const matches: Response[] = []
+
+        const handleResponse = (response: Response) => {
+            if (!predicate(response)) return
+
+            matches.push(response)
+            if (matches.length >= count) {
+                page.off("response", handleResponse)
+                resolve(matches)
+            }
+        }
+
+        page.on("response", handleResponse)
+    })
+}
+
+const confirmCreateEntityModal = async (page: Page) => {
+    const confirmModal = page
+        .locator(".ant-modal-wrap")
+        .filter({
+            has: page.locator(".ant-modal-footer"),
+        })
+        .last()
+    const confirmButton = confirmModal.locator(".ant-modal-footer").getByRole("button", {
+        name: "Create",
+        exact: true,
+    })
+
+    await expect(confirmModal).toBeVisible({timeout: 15000})
+    await expect(confirmButton).toBeVisible({timeout: 15000})
+    await expect(confirmButton).toBeEnabled({timeout: 15000})
+    await confirmButton.click({force: true})
+}
+
+// Dropdown testIds for the CreateAppDropdown popover (apps table header / empty state)
+const TYPE_DROPDOWN_TESTIDS: Record<CREATABLE_APP_TYPE, string> = {
+    completion: "create-app-dropdown-completion",
+    chat: "create-app-dropdown-chat",
+}
+
+// Modal testIds for the CreateAppTypeModal (welcome card "Create a prompt" entry)
+const TYPE_MODAL_TESTIDS: Record<CREATABLE_APP_TYPE, string> = {
+    completion: "create-app-type-modal-completion",
+    chat: "create-app-type-modal-chat",
+}
+
+const openCreateAppDrawerForType = async (page: Page, type: CREATABLE_APP_TYPE) => {
+    const dropdownTypeTestId = TYPE_DROPDOWN_TESTIDS[type]
+    const modalTypeTestId = TYPE_MODAL_TESTIDS[type]
+    const createEntryPoints = [
+        page.getByTestId("create-app-dropdown-trigger").first(),
+        page.getByText("Create a prompt", {exact: true}).first(),
+    ]
+
+    await expect
+        .poll(
+            async () => {
+                for (const ep of createEntryPoints) {
+                    if (await ep.isVisible().catch(() => false)) return true
+                }
+                return false
+            },
+            {timeout: 15000},
+        )
+        .toBe(true)
+
+    const typeSelector = page
+        .getByTestId(dropdownTypeTestId)
+        .or(page.getByTestId(modalTypeTestId))
+        .first()
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        for (const ep of createEntryPoints) {
+            if (!(await ep.isVisible().catch(() => false))) continue
+
+            await ep.scrollIntoViewIfNeeded().catch(() => undefined)
+            await ep.click({force: attempt > 0})
+            break
+        }
+
+        const opened = await typeSelector
+            .waitFor({state: "visible", timeout: 3000})
+            .then(() => true)
+            .catch(() => false)
+
+        if (opened) {
+            await typeSelector.click()
+            const drawer = page
+                .getByRole("dialog")
+                .filter({has: page.getByTestId("app-create-name-input")})
+                .last()
+            await expect(drawer).toBeVisible({timeout: 15000})
+            return drawer
+        }
+
+        await page.keyboard.press("Escape").catch(() => undefined)
+    }
+
+    await expect(typeSelector).toBeVisible({timeout: 15000})
+    await typeSelector.click()
+    const drawer = page
+        .getByRole("dialog")
+        .filter({has: page.getByTestId("app-create-name-input")})
+        .last()
+    await expect(drawer).toBeVisible({timeout: 15000})
+    return drawer
+}
+
+async function createApp(page: Page, type: APP_TYPE): Promise<ListAppsItem> {
+    if (type === "custom") {
+        throw new Error(`App creation is not implemented for app type 'custom'.`)
+    }
+
+    await page.goto(`${getProjectScopedBasePath(page)}/apps`, {waitUntil: "domcontentloaded"})
+    await page.waitForURL("**/apps", {waitUntil: "domcontentloaded"})
+
+    const appName = `e2e-${type}-${Date.now()}`
+    const drawer = await openCreateAppDrawerForType(page, type)
+
+    // The app name is entered via the inline input in the drawer header.
+    const nameInput = page.getByTestId("app-create-name-input").first()
+    await expect(nameInput).toBeVisible({timeout: 15000})
+
+    let nameFilled = false
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+            await nameInput.click()
+            await nameInput.fill(appName)
+            // Blur so the workflow draft picks up the new name via the onBlur handler.
+            await nameInput.blur()
+            nameFilled = true
+            break
+        } catch (error) {
+            if (attempt === 2) {
+                throw error
+            }
+        }
+    }
+
+    expect(nameFilled).toBe(true)
+
+    // 1. POST /workflows/ — create the workflow
+    const createWorkflowPromise = page.waitForResponse((response) => {
+        if (
+            !response.url().includes("/workflows") ||
+            response.url().includes("/query") ||
+            response.url().includes("/variants") ||
+            response.url().includes("/revisions") ||
+            response.request().method() !== "POST"
+        ) {
+            return false
+        }
+        const payload = response.request().postData() || ""
+        return payload.includes(appName)
+    })
+
+    // 2. POST /workflows/variants/ — create the default variant
+    const createVariantPromise = page.waitForResponse((response) => {
+        return (
+            response.url().includes("/workflows/variants") &&
+            !response.url().includes("/query") &&
+            response.request().method() === "POST"
+        )
+    })
+
+    // 3/4. POST /workflows/revisions/commit — app creation commits twice:
+    // seed revision (v0), then the configured revision (v1). Collect both responses
+    // explicitly so the "latest revision" cache never resolves to the first commit.
+    const revisionCommitsPromise = waitForMatchingResponses(
+        page,
+        (response) =>
+            response.url().includes("/workflows/revisions/commit") &&
+            response.request().method() === "POST",
+        2,
+    )
+
+    // CommitVariantChangesButton shows "Create" (not "Commit") for ephemeral local-* entities.
+    // Use exact:true + drawer scope to avoid matching "Create New Prompt" in the background.
+    const createButton = drawer.getByRole("button", {name: "Create", exact: true}).first()
+    await expect(createButton).toBeVisible({timeout: 15000})
+    await expect(createButton).toBeEnabled({timeout: 15000})
+    await createButton.click()
+
+    // Clicking "Create" opens CommitVariantChangesModal (EntityCommitModal with
+    // actionLabel="Create"). Wait for the modal submit button before clicking:
+    // Locator.isVisible() is an immediate snapshot and can race the antd modal render.
+    await confirmCreateEntityModal(page)
+
+    // Wait for workflow creation
+    const workflowResponse = await createWorkflowPromise
+    expect(workflowResponse.ok()).toBe(true)
+    const createdApp = (await workflowResponse.json()) as {workflow: ListAppsItem}
+    const createdWorkflow = createdApp.workflow
+    expect(createdWorkflow.id).toBeTruthy()
+
+    // Wait for variant creation
+    const variantResponse = await createVariantPromise
+    expect(variantResponse.ok()).toBe(true)
+    const variantData = await variantResponse.json()
+    expect(variantData.workflow_variant?.id).toBeTruthy()
+
+    // Wait for both revision commits
+    const [seedResponse, dataResponse] = await revisionCommitsPromise
+    expect(seedResponse.ok()).toBe(true)
+    expect(dataResponse.ok()).toBe(true)
+
+    const revisionData = await dataResponse.json()
+    const latestRevisionId = revisionData.workflow_revision?.id ?? null
+    if (latestRevisionId) {
+        latestRevisionIdByAppId.set(createdWorkflow.id, latestRevisionId)
+    }
+
+    return {
+        ...createdWorkflow,
+        app_type: type,
+    } as ListAppsItem
+}
+
+export const getApp = async (page: Page, type: APP_TYPE = "completion") => {
+    const appsResponse = waitForApiResponse<{workflows: ListAppsItem[]; count: number}>(page, {
+        route: "/workflows/query",
+        method: "POST",
+    })
+
+    await page.goto(`${getProjectScopedBasePath(page)}/apps`, {waitUntil: "domcontentloaded"})
+    await page.waitForURL("**/apps", {waitUntil: "domcontentloaded"})
+
+    const data = await appsResponse
+    const apps = data.workflows ?? []
+
+    expect(Array.isArray(apps)).toBe(true)
+
+    const appMatchesType = (app: ListAppsItem) => {
+        if (type === "chat") return !!app.flags?.is_chat
+        if (type === "custom") return !!app.flags?.is_custom
+        // completion: exclude evaluator apps, which also lack is_chat/is_custom
+        return !app.flags?.is_chat && !app.flags?.is_custom && !app.flags?.is_evaluator
+    }
+
+    let targetApp
+    if (!apps.length) {
+        targetApp = await createApp(page, type)
+    } else if (type) {
+        const app = apps.find(appMatchesType)
+        if (!app) {
+            targetApp = await createApp(page, type)
+        } else {
+            targetApp = app
+        }
+    } else {
+        targetApp = apps[0]
+    }
+    const appId = targetApp.id
+
+    if (!appId) {
+        console.error("[App Fixture] App not found")
+        throw new Error("App not found")
+    }
+
+    return targetApp
+}
+
+export const getAppById = async (page: Page, appId: string) => {
+    const appsResponse = waitForApiResponse<{workflows: ListAppsItem[]; count: number}>(page, {
+        route: "/workflows/query",
+        method: "POST",
+    })
+
+    // Trigger the API call by going to apps page if not already there
+    const currentUrl = page.url()
+    if (!currentUrl.includes("/apps")) {
+        await page.goto(`${getProjectScopedBasePath(page)}/apps`, {waitUntil: "domcontentloaded"})
+        await page.waitForURL("**/apps", {waitUntil: "domcontentloaded"})
+    }
+
+    const data = await appsResponse
+    const apps = data.workflows ?? []
+
+    const app = apps.find((app) => app.id === appId)
+    if (!app) {
+        console.error(`[App Fixture] App not found with ID: ${appId}`)
+        throw new Error(`App not found with ID: ${appId}`)
+    }
+
+    return app
+}
+
+export const getTestsets = async (page: Page) => {
+    const testsetsResponse = waitForApiResponse<{testsets: testset[]}>(page, {
+        route: "/api/testsets/query",
+        method: "POST",
+    })
+
+    await page.goto(`${getProjectScopedBasePath(page)}/testsets`, {waitUntil: "domcontentloaded"})
+    const response = await testsetsResponse
+    const testsets = response.testsets
+    expect(testsets.length).toBeGreaterThan(0)
+
+    return testsets
+}
+
+export const createTestset = async (
+    page: Page,
+    {name, rows, description}: CreateTestsetInput,
+): Promise<CreatedTestset> => {
+    const projectId = getProjectId(page)
+    const slugBase = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+    const slug = `${slugBase || "e2e-testset"}-${Date.now()}`
+
+    const apiUrl = `${getApiURL(page)}/simple/testsets/?project_id=${projectId}`
+
+    let response = await page.request.post(apiUrl, {
+        data: {
+            testset: {
+                slug,
+                name,
+                description,
+                data: {
+                    testcases: rows.map((row) => ({data: row})),
+                },
+            },
+        },
+    })
+
+    // On first failure, wait briefly and retry once — handles transient 5xx/network errors.
+    if (!response.ok()) {
+        await page.waitForTimeout(2000)
+        response = await page.request.post(apiUrl, {
+            data: {
+                testset: {
+                    slug: `${slug}-r`,
+                    name,
+                    description,
+                    data: {
+                        testcases: rows.map((row) => ({data: row})),
+                    },
+                },
+            },
+        })
+    }
+
+    if (!response.ok()) {
+        const body = await response.text().catch(() => "<unreadable>")
+        throw new Error(
+            `createTestset('${name}') failed: HTTP ${response.status()} ${response.statusText()}.\n` +
+                `URL: ${apiUrl}\n` +
+                `Response body: ${body}`,
+        )
+    }
+
+    const data = (await response.json()) as SimpleTestsetApiResponse
+    const testset = data.testset
+
+    if (!testset?.id || !testset.name) {
+        throw new Error(`Failed to create testset '${name}'. Response: ${JSON.stringify(data)}`)
+    }
+
+    const listQueryPayload = {
+        testset: {
+            name: testset.name,
+        },
+        windowing: {
+            limit: 10,
+            order: "descending" as const,
+        },
+    }
+    const queryUrl = `${getApiURL(page)}/testsets/query?project_id=${projectId}`
+    const timeoutAt = Date.now() + 15000
+    let isVisibleInList = false
+
+    while (Date.now() < timeoutAt) {
+        const queryResponse = await page.request.post(queryUrl, {
+            data: listQueryPayload,
+        })
+        expect(queryResponse.ok()).toBe(true)
+
+        const queryData = (await queryResponse.json()) as {
+            testsets?: {id?: string; name?: string}[]
+        }
+        isVisibleInList = (queryData.testsets ?? []).some(
+            (item) => item.id === testset.id || item.name === testset.name,
+        )
+
+        if (isVisibleInList) {
+            break
+        }
+
+        await page.waitForTimeout(500)
+    }
+
+    if (!isVisibleInList) {
+        throw new Error(`Testset '${testset.name}' was created but never appeared in testsets list`)
+    }
+
+    return {
+        id: testset.id,
+        name: testset.name,
+        revisionId: testset.revision_id,
+    }
+}
+
+export const getVariants = async (page: Page, appId: string) => {
+    await page.goto(`${getProjectScopedBasePath(page)}/apps`, {waitUntil: "domcontentloaded"})
+    const overviewPath = `${getProjectScopedBasePath(page)}/apps/${appId}/overview`
+
+    const variantsResponse = waitForApiResponse<{workflow_variants: ApiVariant[]; count: number}>(
+        page,
+        {
+            route: `/workflows/variants/query`,
+            method: "POST",
+        },
+    )
+
+    await page.goto(overviewPath, {waitUntil: "domcontentloaded"})
+    const data = await variantsResponse
+
+    const variants = data.workflow_variants || []
+    const variantsCount = data.count || 0
+    expect(Array.isArray(variants)).toBe(true)
+    expect(variantsCount).toBeGreaterThan(0)
+    expect(variants.length).toBeGreaterThan(0)
+
+    if (!variants.length) {
+        console.error("[App Fixture] No variants found")
+        throw new Error("No variants found")
+    }
+
+    return variants
+}
+
+export const getEvaluationRuns = async (page: Page) => {
+    const evaluationRunsResponse = waitForApiResponse<{
+        runs: SnakeToCamelCaseKeys<EvaluationRun>[]
+        count: number
+    }>(page, {
+        route: `/api/evaluations/runs/query`,
+        method: "POST",
+    })
+
+    await page.goto(`${getProjectScopedBasePath(page)}/evaluations`, {
+        waitUntil: "domcontentloaded",
+    })
+    const evaluationRuns = await evaluationRunsResponse
+
+    // Fix: Check for .runs array in the response
+    expect(Array.isArray(evaluationRuns.runs)).toBe(true)
+    expect(evaluationRuns.runs.length).toBeGreaterThan(0)
+
+    if (!evaluationRuns.runs.length) {
+        console.error("[App Fixture] No evaluation runs found")
+        throw new Error("No evaluation runs found")
+    }
+
+    return evaluationRuns.runs
+}
+
+export const apiHelpers = () => {
+    return async ({page}: FixtureContext, use: UseFn<ApiHelpers>) => {
+        await use({
+            waitForApiResponse: async <T>(options: ApiHandlerOptions<T>) => {
+                return await waitForApiResponse<T>(page, options)
+            },
+            createApp: async (type?: APP_TYPE): Promise<ListAppsItem> => {
+                return await createApp(page, type ?? "completion")
+            },
+            getApp: async (type?: APP_TYPE): Promise<ListAppsItem> => {
+                return await getApp(page, type)
+            },
+            getAppById: async (appId: string): Promise<ListAppsItem> => {
+                return await getAppById(page, appId)
+            },
+            getTestsets: async () => {
+                return await getTestsets(page)
+            },
+            createTestset: async (input: CreateTestsetInput) => {
+                return await createTestset(page, input)
+            },
+            getVariants: async (appId: string) => {
+                return await getVariants(page, appId)
+            },
+            getEvaluationRuns: async () => {
+                return await getEvaluationRuns(page)
+            },
+            getProjectScopedBasePath: () => {
+                return getProjectScopedBasePath(page)
+            },
+        })
+    }
+}
