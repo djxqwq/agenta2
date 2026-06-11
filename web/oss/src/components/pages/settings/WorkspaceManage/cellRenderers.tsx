@@ -29,8 +29,9 @@ export const Actions: React.FC<{
     organizationId: string
     workspaceId: string
     onResendInvite: any
+    onRemove?: () => void
     selfMenu?: boolean
-}> = ({member, hidden, organizationId, workspaceId, onResendInvite, selfMenu}) => {
+}> = ({member, hidden, organizationId, workspaceId, onResendInvite, onRemove, selfMenu}) => {
     const {user} = member
     const isMember = user.status === "member"
 
@@ -65,7 +66,10 @@ export const Actions: React.FC<{
             message: `Are you sure you want to remove ${user.username} from this workspace?`,
             onOk: () =>
                 removeFromWorkspace({organizationId, workspaceId, email: user.email}, true).then(
-                    () => refetch(),
+                    () => {
+                        refetch()
+                        onRemove?.()
+                    },
                 ),
             okText: "Remove",
         })

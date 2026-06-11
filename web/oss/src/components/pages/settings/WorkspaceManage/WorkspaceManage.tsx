@@ -1,8 +1,9 @@
-import {useMemo, useState, type FC} from "react"
+import {useEffect, useMemo, useState, type FC} from "react"
 
 import {GearSix, Plus} from "@phosphor-icons/react"
 import {Button, Input, Space, Spin, Table, Tag, Typography} from "antd"
 import {ColumnsType} from "antd/es/table"
+import {useAtomValue} from "jotai"
 import dynamic from "next/dynamic"
 
 import {useQueryParam} from "@/oss/hooks/useQuery"
@@ -12,8 +13,10 @@ import {isEmailInvitationsEnabled, isEE} from "@/oss/lib/helpers/isEE"
 import {useEntitlements} from "@/oss/lib/helpers/useEntitlements"
 import {getUsernameFromEmail} from "@/oss/lib/helpers/utils"
 import {WorkspaceMember} from "@/oss/lib/Types"
+import {fetchProjectMembers} from "@/oss/services/workspace/api"
 import {useOrgData} from "@/oss/state/org"
 import {useProfileData} from "@/oss/state/profile"
+import {projectIdAtom} from "@/oss/state/project"
 import {useWorkspaceMembers} from "@/oss/state/workspace"
 
 import AvatarWithLabel from "./assets/AvatarWithLabel"
@@ -28,6 +31,7 @@ const WorkspaceManage: FC = () => {
     const {filteredMembers, searchTerm, setSearchTerm} = useWorkspaceMembers()
     const {hasRBAC} = useEntitlements()
     const {canInviteMembers} = useWorkspacePermissions()
+    const projectId = useAtomValue(projectIdAtom)
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
     const [isInvitedUserLinkModalOpen, setIsInvitedUserLinkModalOpen] = useState(false)
     const [invitedUserData, setInvitedUserData] = useState<{email: string; uri: string}>({
@@ -35,9 +39,29 @@ const WorkspaceManage: FC = () => {
         uri: "",
     })
     const [queryInviteModalOpen, setQueryInviteModalOpen] = useQueryParam("inviteModal")
+    const [projectMembers, setProjectMembers] = useState<WorkspaceMember[]>([])
+    const [projectMembersLoading, setProjectMembersLoading] = useState(false)
+    const [membersVersion, setMembersVersion] = useState(0)
 
     const organizationId = selectedOrg?.id
     const workspaceId = selectedOrg?.default_workspace?.id
+
+    // When a project is selected, fetch project-level members instead of workspace members
+    useEffect(() => {
+        if (!projectId) {
+            setProjectMembers([])
+            return
+        }
+        setProjectMembersLoading(true)
+        fetchProjectMembers(projectId)
+            .then((members) => setProjectMembers(members))
+            .catch(() => setProjectMembers([]))
+            .finally(() => setProjectMembersLoading(false))
+    }, [projectId, membersVersion])
+
+    // Use project members when a project is selected, workspace members otherwise
+    const displayMembers = projectId ? projectMembers : filteredMembers
+    const isLoading = loading || (projectId ? projectMembersLoading : false)
 
     const columns = useMemo(
         () =>
@@ -137,6 +161,7 @@ const WorkspaceManage: FC = () => {
                                             setIsInvitedUserLinkModalOpen(true)
                                         }
                                     }}
+                                    onRemove={() => setMembersVersion(v => v + 1)}
                                 />
                             )
                         },
@@ -168,9 +193,9 @@ const WorkspaceManage: FC = () => {
                 />
             </div>
 
-            <Spin spinning={loading}>
+            <Spin spinning={isLoading}>
                 <Table<WorkspaceMember>
-                    dataSource={filteredMembers}
+                    dataSource={displayMembers}
                     rowKey={(record) => record.user.id}
                     columns={columns}
                     pagination={false}
@@ -189,7 +214,10 @@ const WorkspaceManage: FC = () => {
                         setInvitedUserData(data)
                         setIsInvitedUserLinkModalOpen(true)
                     }
+                    setMembersVersion((v) => v + 1)
+                    refetch()
                 }}
+                onRefresh={() => setMembersVersion(v => v + 1)}
             />
             {!isEmailInvitationsEnabled() && (
                 <InvitedUserLinkModal

@@ -111,7 +111,14 @@ const usePostAuthRedirect = () => {
             if (isNewUser) {
                 if (isInvitedUser) {
                     console.log("[post-auth] redirect invited new user -> /workspaces/accept")
-                    await router.push("/workspaces/accept?survey=true")
+                    const inviteQuery = new URLSearchParams()
+                    if (invite.token) inviteQuery.set("token", String(invite.token))
+                    if (invite.email) inviteQuery.set("email", String(invite.email))
+                    if (invite.organization_id) inviteQuery.set("organization_id", String(invite.organization_id))
+                    if (invite.workspace_id) inviteQuery.set("workspace_id", String(invite.workspace_id))
+                    if (invite.project_id) inviteQuery.set("project_id", String(invite.project_id))
+                    inviteQuery.set("survey", "true")
+                    await router.push(`/workspaces/accept?${inviteQuery.toString()}`)
                 } else if (isEE()) {
                     console.log("[post-auth] redirect new EE user -> /post-signup")
                     writePostSignupPending()
@@ -129,7 +136,13 @@ const usePostAuthRedirect = () => {
 
             if (isInvitedUser) {
                 console.log("[post-auth] redirect invited user -> /workspaces/accept")
-                await router.push("/workspaces/accept")
+                const inviteQuery = new URLSearchParams()
+                if (invite.token) inviteQuery.set("token", String(invite.token))
+                if (invite.email) inviteQuery.set("email", String(invite.email))
+                if (invite.organization_id) inviteQuery.set("organization_id", String(invite.organization_id))
+                if (invite.workspace_id) inviteQuery.set("workspace_id", String(invite.workspace_id))
+                if (invite.project_id) inviteQuery.set("project_id", String(invite.project_id))
+                await router.push(`/workspaces/accept?${inviteQuery.toString()}`)
                 return
             }
 

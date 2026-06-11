@@ -38,35 +38,15 @@ echo.
 
 REM ---- 3. API (8000) ----
 echo [3/5] API (port 8000)...
-start "Agenta API" cmd /k ^
-"cd /d %ROOT%\api && ^
-set POSTGRES_URI_CORE=postgresql+asyncpg://username:password@localhost:5432/agenta_oss_core && ^
-set POSTGRES_URI_TRACING=postgresql+asyncpg://username:password@localhost:5432/agenta_oss_tracing && ^
-set SUPERTOKENS_URI_CORE=http://localhost:3567 && ^
-set AGENTA_LICENSE=oss && ^
-set AGENTA_AUTH_KEY=agenta-local-dev-auth-key-2024 && ^
-set AGENTA_CRYPT_KEY=agenta-local-dev-crypt-key-2024 && ^
-set AGENTA_WEB_URL=http://localhost:3000 && ^
-set AGENTA_API_URL=http://localhost:8000 && ^
-set AGENTA_SERVICES_URL=http://localhost:8080 && ^
-set REDIS_URI=redis://localhost:6379/0 && ^
-set REDIS_URI_DURABLE=redis://localhost:6381/0 && ^
-set REDIS_URI_VOLATILE=redis://localhost:6379/0 && ^
-set ALEMBIC_CFG_PATH_CORE=%ROOT%\api\oss\databases\postgres\migrations\core\alembic.ini && ^
-set ALEMBIC_CFG_PATH_TRACING=%ROOT%\api\oss\databases\postgres\migrations\tracing\alembic.ini && ^
-uv run python -m uvicorn entrypoints.routers:app --host 0.0.0.0 --port 8000 --reload"
+start "Agenta API" powershell -File "%ROOT%\api\start_api.ps1"
 
 REM ---- 4. Services (8080) ----
 echo [4/5] Services (port 8080)...
-start "Agenta Services" cmd /k ^
-"cd /d %ROOT%\services && ^
-set AGENTA_API_URL=http://localhost:8000 && ^
-set AGENTA_WEB_URL=http://localhost:3000 && ^
-uv run python -m uvicorn entrypoints.main:app --host 0.0.0.0 --port 8080 --reload"
+start "Agenta Services" powershell -File "%ROOT%\services\start_services.ps1"
 
 REM ---- 5. Frontend (3000) ----
 echo [5/5] Frontend (port 3000)...
-start "Agenta Web" cmd /k "cd /d %ROOT%\web\oss && pnpm dev"
+start "Agenta Web" powershell -File "%ROOT%\web\oss\start_web.ps1"
 
 echo.
 echo ==============================================

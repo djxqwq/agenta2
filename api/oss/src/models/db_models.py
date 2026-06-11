@@ -593,6 +593,42 @@ class InvitationDB(Base):
     )
 
 
+class ProjectMemberDB(Base):
+    __tablename__ = "project_members"
+    __table_args__ = {"extend_existing": True}
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid7,
+        unique=True,
+        nullable=False,
+    )
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+    project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role = Column(String, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    user = relationship("oss.src.models.db_models.UserDB")
+    project = relationship("oss.src.models.db_models.ProjectDB")
+
+
 class APIKeyDB(Base):
     __tablename__ = "api_keys"
 

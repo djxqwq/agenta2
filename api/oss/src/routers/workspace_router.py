@@ -162,9 +162,42 @@ async def remove_user_from_workspace(
             raise
 
     else:
-        delete_user_from_workspace = await db_manager.remove_user_from_workspace(
-            project_id=request.state.project_id,
-            email=email,
+        project_id = getattr(request.state, "project_id", None)
+        caller_id = getattr(request.state, "user_id", None)
+        project = await db_manager.fetch_project_by_id(project_id) if project_id else None
+        org_owner_id = None
+        if project:
+            owner = await db_manager.get_organization_owner(str(project.organization_id))
+            org_owner_id = str(owner.id) if owner else None
+        is_owner_or_admin = await db_manager.is_project_owner_or_admin(
+            str(project_id), caller_id, org_owner_id or ""
         )
+        if not is_owner_or_admin:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": "You do not have permission to perform this action. Please contact your Organization Owner"
+                },
+            )
+
+        try:
+            delete_user_from_workspace = await db_manager.remove_user_from_workspace(
+                project_id=project_id,
+                email=email,
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.error(
+                "Failed to remove user from workspace",
+                workspace_id=workspace_id,
+                email=email,
+                project_id=project_id,
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=str(e) or "Failed to remove user from workspace",
+            )
 
     return delete_user_from_workspace

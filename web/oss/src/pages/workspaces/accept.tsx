@@ -62,7 +62,7 @@ const Accept: FC = () => {
             processedTokens.add(token)
             const store = getDefaultStore()
             try {
-                await new Promise<void>((resolve) => {
+                await new Promise<void>((resolve, reject) => {
                     let unsub: () => void = () => {}
                     const check = () => {
                         const ready = (store.get(jwtReadyAtom) as any)?.data ?? false
@@ -73,6 +73,11 @@ const Accept: FC = () => {
                     }
                     unsub = store.sub(jwtReadyAtom, check)
                     check()
+                    // Timeout after 5s - if not authenticated, redirect to login
+                    const timeout = setTimeout(() => {
+                        unsub()
+                        reject(new Error("NOT_AUTHENTICATED"))
+                    }, 5000)
                 })
 
                 try {
@@ -150,6 +155,13 @@ const Accept: FC = () => {
                     }
                 }
             } catch (error: any) {
+                // Not authenticated - redirect to login preserving invite params
+                if (error?.message === "NOT_AUTHENTICATED") {
+                    const currentUrl = new URL(window.location.href)
+                    await router.replace(`/auth?redirect=${encodeURIComponent(currentUrl.pathname + currentUrl.search)}`)
+                    return
+                }
+
                 // Treat idempotent scenarios (already a member / already accepted) as success
                 const alreadyMember =
                     error?.response?.status === 409 ||

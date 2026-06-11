@@ -204,3 +204,16 @@ export const fetchWorkspaceMembers = async (
     )
     return response.data as WorkspaceMember[]
 }
+
+export const fetchProjectMembers = async (
+    projectId: string,
+    ignoreAxiosError = false,
+): Promise<WorkspaceMember[]> => {
+    const response = await axios.get(
+        `${getAgentaApiUrl()}/projects/${projectId}/members`,
+        {
+            _ignoreError: ignoreAxiosError,
+        } as any,
+    )
+    return response.data as WorkspaceMember[]
+}

@@ -40,6 +40,7 @@ from oss.src.dbs.postgres.workflows.dbes import (
 from oss.src.models.db_models import (
     WorkspaceDB,
     ProjectDB,
+    ProjectMemberDB,
 )
 
 from oss.src.models.db_models import (
@@ -552,27 +553,19 @@ async def _assign_user_to_organization_oss(
             organization_id=organization_id, values_to_update={"owner_id": user_db.id}
         )
 
-    # Get the singleton default project belonging to organization. We must
-    # filter by is_default=True because OSS now mints per-account ephemeral
-    # projects under the same singleton workspace; the unfiltered lookup
-    # would non-deterministically attach invitations to the wrong project.
-    project_db = await get_default_project_by_organization_id(
-        organization_id=organization_id
+    # Process ALL pending invitations for this user across the organization
+    pending_invitations = await get_pending_invitations_by_email(
+        email=email, organization_id=organization_id
     )
-    if project_db is None:
-        raise NoResultFound(
-            f"No default project found for organization_id {organization_id} "
-            "while assigning user; OSS singleton is in an inconsistent state."
-        )
-
-    # Update user invitation if the user was invited
-    invitation = await get_project_invitation_by_organization_and_email(
-        organization_id=organization_id, email=email
-    )
-    if invitation is not None:
+    for invitation in pending_invitations:
         await update_invitation(
             invitation_id=str(invitation.id),
             values_to_update={"user_id": str(user_db.id), "used": True},
+        )
+        await ensure_project_member(
+            project_id=str(invitation.project_id),
+            user_id=str(user_db.id),
+            role=invitation.role or "viewer",
         )
 
 
@@ -1407,6 +1400,18 @@ async def get_project_invitations(project_id: str) -> InvitationDB:
         return invitation
 
 
+async def get_invitations_by_project_id(project_id: str) -> list[InvitationDB]:
+    """Get pending (unused) invitations for a project."""
+    async with engine.core_session() as session:
+        result = await session.execute(
+            select(InvitationDB).filter_by(
+                project_id=uuid.UUID(project_id),
+                used=False,
+            )
+        )
+        return list(result.scalars().all())
+
+
 async def update_invitation(invitation_id: str, values_to_update: dict) -> bool:
     """
     Update an invitation from an organization.
@@ -1580,6 +1585,58 @@ async def get_project_invitation_by_organization_token_and_email(
             )
         )
         return result.scalars().first()
+
+
+async def get_invitation_by_email_across_organization(
+    email: str, organization_id: str
+) -> Optional[InvitationDB]:
+    """Get invitation by email across all projects in an organization."""
+    async with engine.core_session() as session:
+        result = await session.execute(
+            select(InvitationDB)
+            .join(ProjectDB, InvitationDB.project_id == ProjectDB.id)
+            .filter(
+                InvitationDB.email == email,
+                ProjectDB.organization_id == uuid.UUID(organization_id),
+            )
+        )
+        return result.scalars().first()
+
+
+async def get_pending_invitations_by_email(
+    email: str, organization_id: str
+) -> list[InvitationDB]:
+    """Get all pending (unused) invitations for an email in an organization."""
+    async with engine.core_session() as session:
+        result = await session.execute(
+            select(InvitationDB)
+            .join(ProjectDB, InvitationDB.project_id == ProjectDB.id)
+            .filter(
+                InvitationDB.email == email,
+                InvitationDB.used == False,  # noqa: E712
+                ProjectDB.organization_id == uuid.UUID(organization_id),
+            )
+        )
+        return list(result.scalars().all())
+
+
+async def can_manage_project_members(project_id: str, user_id: str) -> bool:
+    """Check if user can add/remove members (owner or admin)."""
+    async with engine.core_session() as session:
+        result = await session.execute(
+            select(ProjectMemberDB.role).filter_by(
+                project_id=uuid.UUID(project_id),
+                user_id=uuid.UUID(user_id),
+            )
+        )
+        role = result.scalars().first()
+        return role in ("owner", "admin")
+
+
+async def is_project_owner_or_admin(project_id: str, user_id: str, org_owner_id: str) -> bool:
+    if user_id == org_owner_id:
+        return True
+    return await can_manage_project_members(project_id, user_id)
 
 
 async def get_user_api_key_by_prefix(
@@ -1941,3 +1998,88 @@ async def admin_transfer_org_ownership_batch(
                 )
             )
         await session.commit()
+
+
+# ── Project Member Management ───────────────────────────────────────────────
+
+
+async def ensure_project_member(
+    project_id: str,
+    user_id: str,
+    role: str = "viewer",
+):
+    """Add or update a project member. Creates if not exists, updates role if exists."""
+    async with engine.core_session() as session:
+        result = await session.execute(
+            select(ProjectMemberDB).filter_by(
+                project_id=uuid.UUID(project_id),
+                user_id=uuid.UUID(user_id),
+            )
+        )
+        member = result.scalars().first()
+        if member:
+            member.role = role
+            member.updated_at = datetime.now(timezone.utc)
+            await session.commit()
+            await session.refresh(member)
+            return member
+
+        member = ProjectMemberDB(
+            project_id=uuid.UUID(project_id),
+            user_id=uuid.UUID(user_id),
+            role=role,
+        )
+        session.add(member)
+        await session.commit()
+        await session.refresh(member)
+        return member
+
+
+async def get_project_members(project_id: str):
+    """Get all members of a project with user info loaded."""
+    async with engine.core_session() as session:
+        result = await session.execute(
+            select(ProjectMemberDB)
+            .options(joinedload(ProjectMemberDB.user))
+            .filter(ProjectMemberDB.project_id == uuid.UUID(project_id))
+            .order_by(ProjectMemberDB.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+
+async def get_project_members_for_user(user_id: str):
+    """Get all project membership records for a user."""
+    async with engine.core_session() as session:
+        result = await session.execute(
+            select(ProjectMemberDB)
+            .options(joinedload(ProjectMemberDB.project))
+            .filter(ProjectMemberDB.user_id == uuid.UUID(user_id))
+        )
+        return list(result.scalars().all())
+
+
+async def is_user_project_member(project_id: str, email: str) -> bool:
+    """Check if a user is a member of a project by email."""
+    user = await get_user_with_email(email=email)
+    if not user:
+        return False
+    async with engine.core_session() as session:
+        result = await session.execute(
+            select(ProjectMemberDB).filter_by(
+                project_id=uuid.UUID(project_id),
+                user_id=user.id,
+            )
+        )
+        return result.scalars().first() is not None
+
+
+async def get_project_member_role(project_id: str, user_id: str) -> str | None:
+    """Get the role of a user in a project, or None if not a member."""
+    async with engine.core_session() as session:
+        result = await session.execute(
+            select(ProjectMemberDB.role).filter_by(
+                project_id=uuid.UUID(project_id),
+                user_id=uuid.UUID(user_id),
+            )
+        )
+        return result.scalars().first()

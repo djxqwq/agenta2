@@ -159,15 +159,49 @@ async def get_projects(
                 workspace_id=str(workspace_id)
             )
             if not projects_db:
-                raise HTTPException(status_code=404, detail="No projects found")
+                # Auto-create a default project when none exists (e.g., after DB reset)
+                default_project = await db_manager.create_workspace_project(
+                    project_name="Default",
+                    workspace_id=str(workspace_id),
+                    organization_id=str(organization.id),
+                    set_default=True,
+                    creator_id=str(request.state.user_id),
+                )
+                await db_manager.ensure_project_member(
+                    project_id=str(default_project.id),
+                    user_id=str(request.state.user_id),
+                    role="owner",
+                )
+                projects_db = [default_project]
 
-            user_role = _get_oss_user_role(organization, request.state.user_id)
+            is_owner = str(organization.owner_id) == str(request.state.user_id)
+
+            if is_owner:
+                projects = []
+                for project in projects_db:
+                    project_response = await _project_to_response(
+                        project,
+                        user_role="owner",
+                        is_demo=False,
+                        workspace=workspace,
+                        organization=organization,
+                    )
+                    projects.append(project_response)
+                return projects
+
+            member_entries = await db_manager.get_project_members_for_user(
+                user_id=str(request.state.user_id)
+            )
+            member_project_ids = {str(m.project_id) for m in member_entries}
+            member_role_map = {str(m.project_id): m.role for m in member_entries}
 
             projects = []
             for project in projects_db:
+                if str(project.id) not in member_project_ids:
+                    continue
                 project_response = await _project_to_response(
                     project,
-                    user_role=user_role,
+                    user_role=member_role_map.get(str(project.id), "viewer"),
                     is_demo=False,
                     workspace=workspace,
                     organization=organization,
@@ -255,7 +289,24 @@ async def get_project(
                     status_code=404, detail="Project organization not found"
                 )
 
-            user_role = _get_oss_user_role(organization, request.state.user_id)
+            is_owner = str(organization.owner_id) == str(request.state.user_id)
+
+            if not is_owner:
+                member_entries = await db_manager.get_project_members_for_user(
+                    user_id=str(request.state.user_id)
+                )
+                member_project_ids = {str(m.project_id) for m in member_entries}
+                if str(lookup_project_id) not in member_project_ids:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You are not a member of this project",
+                    )
+                user_role = next(
+                    (m.role for m in member_entries if str(m.project_id) == str(lookup_project_id)),
+                    "viewer",
+                )
+            else:
+                user_role = "owner"
 
             return await _project_to_response(
                 project,
@@ -296,6 +347,109 @@ async def get_project(
         raise HTTPException(status_code=500, detail="Unable to fetch project") from exc
 
 
+class ProjectMemberResponse(BaseModel):
+    user: dict
+    roles: list = []
+
+
+@router.get(
+    "/{project_id}/members",
+    operation_id="get_project_members",
+    response_model=List[ProjectMemberResponse],
+)
+async def get_project_members(
+    project_id: UUID,
+    request: Request,
+):
+    """Get members of a project (project-level, not workspace-level)."""
+    if is_ee():
+        membership = await _get_ee_membership_for_project(
+            user_id=request.state.user_id,
+            project_id=project_id,
+        )
+        if not membership:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        members = await db_manager_ee.get_project_members(str(project_id))
+        return [
+            ProjectMemberResponse(
+                user={
+                    "id": str(m.user_id),
+                    "email": m.user.email if m.user else "",
+                    "username": m.user.username if m.user else "",
+                    "status": "member",
+                    "created_at": str(m.created_at) if m.created_at else "",
+                },
+                roles=[
+                    {"name": m.role, "description": "", "permissions": []}
+                ] if hasattr(m, 'role') else [],
+            )
+            for m in members
+        ]
+
+    project = await db_manager.fetch_project_by_id(str(project_id))
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    organization_id = str(project.organization_id)
+    owner = await db_manager.get_organization_owner(organization_id=organization_id)
+    project_members = await db_manager.get_project_members(str(project_id))
+    invitations = await db_manager.get_invitations_by_project_id(str(project_id))
+
+    result: list[ProjectMemberResponse] = []
+    seen_emails: set[str] = set()
+    seen_user_ids: set[str] = set()
+
+    if owner:
+        result.append(ProjectMemberResponse(
+            user={
+                "id": str(owner.id),
+                "email": str(owner.email),
+                "username": str(owner.username),
+                "status": "member",
+                "created_at": str(owner.created_at) if owner.created_at else "",
+            },
+            roles=[{"role_name": "owner", "description": "Organization owner", "permissions": []}],
+        ))
+        seen_user_ids.add(str(owner.id))
+        seen_emails.add(str(owner.email).lower())
+
+    for pm in project_members:
+        if str(pm.user_id) in seen_user_ids:
+            continue
+        user = await db_manager.get_user_with_id(user_id=str(pm.user_id))
+        result.append(ProjectMemberResponse(
+            user={
+                "id": str(pm.user_id),
+                "email": user.email if user else "",
+                "username": user.username if user else "",
+                "status": "member",
+                "created_at": str(pm.created_at) if pm.created_at else "",
+            },
+            roles=[{"role_name": pm.role or "viewer", "description": "", "permissions": []}],
+        ))
+        seen_user_ids.add(str(pm.user_id))
+        if user and user.email:
+            seen_emails.add(user.email.lower())
+
+    for inv in (invitations or []):
+        if inv.email.lower() in seen_emails:
+            continue
+        result.append(ProjectMemberResponse(
+            user={
+                "id": str(inv.id),
+                "email": inv.email,
+                "username": inv.email.split("@")[0] if inv.email else "",
+                "status": "pending",
+                "created_at": str(inv.created_at) if inv.created_at else "",
+            },
+            roles=[{"role_name": inv.role or "viewer", "description": "", "permissions": []}],
+        ))
+        seen_emails.add(inv.email.lower())
+
+    return result
+
+
 @router.post(
     "/",
     operation_id="create_project",
@@ -306,8 +460,6 @@ async def create_project(
     request: Request,
     payload: CreateProjectRequest,
 ) -> ProjectsResponse:
-    # await _assert_org_owner(request)
-
     workspace_id = getattr(request.state, "workspace_id", None)
     organization_id = getattr(request.state, "organization_id", None)
 
@@ -315,6 +467,18 @@ async def create_project(
         raise HTTPException(
             status_code=400, detail="Workspace and organization context are required"
         )
+
+    # OSS: only organization owner can create projects
+    if not is_ee():
+        caller_id = getattr(request.state, "user_id", None)
+        organization = await db_manager.fetch_organization_by_id(
+            organization_id=str(organization_id)
+        )
+        if not organization or str(organization.owner_id) != str(caller_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Only the organization owner can create projects.",
+            )
 
     project_name = payload.name.strip()
 
@@ -384,6 +548,13 @@ async def create_project(
         user_id=UUID(request.state.user_id),
     )
 
+    # Add creator as project owner member
+    await db_manager.ensure_project_member(
+        project_id=str(project.id),
+        user_id=str(request.state.user_id),
+        role="owner",
+    )
+
     organization = await db_manager.fetch_organization_by_id(
         organization_id=str(organization_id)
     )
@@ -408,7 +579,9 @@ async def delete_project(
     project_id: UUID,
     request: Request,
 ):
-    # await _assert_org_owner(request)
+    # Only organization owner can delete projects
+    if not is_ee():
+        await _assert_org_owner(request)
 
     workspace_id = getattr(request.state, "workspace_id", None)
 

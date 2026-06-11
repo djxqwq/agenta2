@@ -15,7 +15,7 @@ import {useWorkspaceRoles} from "@/oss/state/workspace"
 
 import {InviteFormProps, InviteUsersModalProps} from "./assets/types"
 
-const InviteForm: FC<InviteFormProps> = ({onSuccess, workspaceId, form, setLoading}) => {
+const InviteForm: FC<InviteFormProps> = ({onSuccess, workspaceId, form, setLoading, onRefresh}) => {
     const {selectedOrg, refetch} = useOrgData()
     const {roles} = useWorkspaceRoles()
     const {hasRBAC} = useEntitlements()
@@ -57,6 +57,7 @@ const InviteForm: FC<InviteFormProps> = ({onSuccess, workspaceId, form, setLoadi
                     }
 
                     form.resetFields()
+                    onRefresh?.()
                 })
                 .catch((error: any) => {
                     const detail = error?.response?.data?.detail
@@ -190,6 +191,7 @@ const InviteUsersModal: FC<InviteUsersModalProps> = ({
     onSuccess,
     workspaceId,
     setQueryInviteModalOpen,
+    onRefresh,
     ...props
 }) => {
     const [form] = Form.useForm()
@@ -230,6 +232,7 @@ const InviteUsersModal: FC<InviteUsersModalProps> = ({
                 }}
                 workspaceId={workspaceId}
                 setLoading={setLoading}
+                onRefresh={onRefresh}
             />
         </Modal>
     )

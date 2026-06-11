@@ -17,15 +17,23 @@ def generate_invitation_token(token_length: int = 16):
 
 async def check_existing_invitation(project_id: str, email: str):
     """
-    Checks if there is an existing invitation for a given project and email address.
+    Checks if there is an existing invitation or membership for a given project and email address.
 
     Args:
         project_id (str): The ID of the project for which the invitation is being checked.
         email_address (str): The email address of the user for whom the invitation is being checked.
 
     Returns:
-    - invitation (InvitationDB): The existing invitation if it is valid and not expired. Otherwise, returns None.
+    - (invitation_or_flag, role): If already a member, returns ("ALREADY_MEMBER", None).
+      If an existing valid invitation exists, returns (invitation, None).
+      Otherwise, returns (None, None).
     """
+
+    is_member = await db_manager.is_user_project_member(
+        project_id=project_id, email=email
+    )
+    if is_member:
+        return "ALREADY_MEMBER", None
 
     invitation = await db_manager.get_project_invitation_by_email(
         project_id=project_id, email=email
@@ -253,8 +261,22 @@ async def invite_user_to_organization(
             detail="User is already a member of the workspace",
         )
 
-    # Create a new invitation since user hasn't been invited
-    invitation = await create_invitation("admin", project_id, payload.email)
+    # Check if the email already has an account in the database
+    existing_user = await db_manager.get_user_with_email(email=payload.email)
+
+    role = "viewer"
+
+    if existing_user:
+        # User already has an account, directly add them as a member
+        await db_manager.ensure_project_member(
+            project_id=project_id,
+            user_id=str(existing_user.id),
+            role=role,
+        )
+        return {"status": "success", "message": "User already exists, added as member directly"}
+
+    # Create a new invitation since user doesn't have an account yet
+    invitation = await create_invitation(role, project_id, payload.email)
 
     # Get project by id
     project_db = await db_manager.get_project_by_id(project_id=project_id)
@@ -372,21 +394,45 @@ async def accept_organization_invitation(
         if user_exists is None:
             raise HTTPException(status_code=400, detail="User does not exist")
 
-        invitation = await check_valid_organization_invitation(
-            organization_id=organization_id,
-            email=email,
-            token=token,
+        # Validate the provided token first
+        invitation = await db_manager.get_invitation_by_email_across_organization(
+            email=email, organization_id=organization_id
         )
-        if invitation is not None:
-            await db_manager.update_invitation(
-                str(invitation.id), values_to_update={"used": True}
-            )
-            return True
 
-        else:
-            # Existing invitation is expired
+        if invitation is None:
             raise HTTPException(
-                status_code=400, detail="Invitation has expired or does not exist"
+                status_code=400, detail="Invitation does not exist"
             )
+
+        if invitation.token != token:
+            raise HTTPException(
+                status_code=400, detail="Invalid invitation token"
+            )
+
+        if invitation.expiration_date and invitation.expiration_date < datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=400, detail="Invitation has expired"
+            )
+
+        # Get all pending invitations for this user's email
+        pending_invitations = await db_manager.get_pending_invitations_by_email(
+            email=email, organization_id=organization_id
+        )
+
+        # Process all pending invitations at once
+        for inv in pending_invitations:
+            await db_manager.update_invitation(
+                str(inv.id),
+                values_to_update={
+                    "used": True,
+                    "user_id": str(user_exists.id),
+                },
+            )
+            await db_manager.ensure_project_member(
+                project_id=str(inv.project_id),
+                user_id=str(user_exists.id),
+                role=inv.role or "viewer",
+            )
+        return True
     except Exception as e:
         raise e

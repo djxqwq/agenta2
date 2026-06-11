@@ -101,14 +101,14 @@ const ProjectsSettings = () => {
 
     const deleteMutation = useMutation({
         mutationFn: (projectId: string) => deleteProject(projectId),
-        onSuccess: () => {
-            message.success("Project deleted")
-            void invalidateProjects()
+        onSuccess: (response) => {
+            if (!response?._isPermissionDenied) {
+                message.success("Project deleted")
+                void invalidateProjects()
+            }
         },
-        onError: (error: any) => {
-            const detail =
-                error?.response?.data?.detail || error?.message || "Unable to delete project"
-            message.error(detail)
+        onError: () => {
+            // Error handled by axios interceptor (e.g., 403 permission denied)
         },
     })
 

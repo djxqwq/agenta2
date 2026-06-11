@@ -81,6 +81,7 @@ class WorkspaceMemberDB(Base):
 
 class ProjectMemberDB(Base):
     __tablename__ = "project_members"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(
         UUID(as_uuid=True),

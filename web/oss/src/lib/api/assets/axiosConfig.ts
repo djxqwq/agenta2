@@ -219,11 +219,18 @@ axios.interceptors.response.use(
             return Promise.reject(error)
         }
 
-        // if axios config has _ignoreError set to true, then don't handle error
-        if (error.config?._ignoreError) throw error
-
-        if (error.response?.status === 403 && error.config.method !== "get") {
+        // Handle 403 Forbidden for all requests (before _ignoreError check)
+        if (error.response?.status === 403) {
             const detail = error.response?.data?.detail
+            
+            // Skip domain denied error as it has special handling
+            if (detail?.error === "AUTH_DOMAIN_DENIED") {
+                if (error.config) {
+                    error.config._ignoreError = true
+                }
+                throw error
+            }
+            
             const detailMessage =
                 typeof detail === "string" ? detail : detail?.message || PERMISSION_ERR_MSG
             AlertPopup({
@@ -231,18 +238,13 @@ axios.interceptors.response.use(
                 message: detailMessage,
                 cancelText: null,
                 okText: "Ok",
-            }) // Commented out for test environment
+            })
             error.message = detailMessage
-            throw error
+            return Promise.resolve({data: null, _isPermissionDenied: true})
         }
 
-        const domainDeniedDetail = error.response?.data?.detail
-        if (error.response?.status === 403 && domainDeniedDetail?.error === "AUTH_DOMAIN_DENIED") {
-            if (error.config) {
-                error.config._ignoreError = true
-            }
-            throw error
-        }
+        // if axios config has _ignoreError set to true, then don't handle error
+        if (error.config?._ignoreError) throw error
 
         let msg = getErrorMessage(error.response?.data?.error || error.response?.data, "")
         if (!msg)

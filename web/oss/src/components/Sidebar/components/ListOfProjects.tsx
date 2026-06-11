@@ -165,14 +165,16 @@ const ListOfProjects = ({
 
     const deleteMutation = useMutation({
         mutationFn: (projectId: string) => deleteProject(projectId),
-        onSuccess: () => {
-            message.success("Project deleted")
-            void refreshProjects()
+        onSuccess: (response) => {
+            // Only show success message if the request was actually successful
+            // (axios interceptor returns {data: null, _isPermissionDenied: true} for 403 errors)
+            if (!response?._isPermissionDenied) {
+                message.success("Project deleted")
+                void refreshProjects()
+            }
         },
-        onError: (error: any) => {
-            const detail =
-                error?.response?.data?.detail || error?.message || "Unable to delete project"
-            message.error(detail)
+        onError: () => {
+            // Error handled by axios interceptor (e.g., 403 permission denied)
         },
     })
 

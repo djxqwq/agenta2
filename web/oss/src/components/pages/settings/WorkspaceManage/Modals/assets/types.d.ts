@@ -17,6 +17,7 @@ export interface InviteUsersModalProps extends ModalProps {
     setQueryInviteModalOpen: (val: string) => void
     onSuccess?: (data: {email: string; uri: string} | null) => void
     workspaceId: string
+    onRefresh?: () => void
 }
 
 export interface InviteFormProps {
@@ -24,4 +25,5 @@ export interface InviteFormProps {
     setLoading: React.Dispatch<React.SetStateAction<boolean>>
     onSuccess?: (data: {email: string; uri: string} | null) => void
     workspaceId: string
+    onRefresh?: () => void
 }
